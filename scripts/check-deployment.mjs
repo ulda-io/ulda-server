@@ -10,7 +10,10 @@ const root=fileURLToPath(new URL("../",import.meta.url));process.chdir(root);
 const id=randomUUID().replaceAll("-",""),folder=path.join(root,".local","deployment-"+id);
 fs.mkdirSync(folder,{recursive:true});fs.writeFileSync(path.join(folder,"empty.env"),"");
 const certs=path.join(folder,"certs");fs.mkdirSync(certs);
-const source="ulda-deploy-"+id.slice(0,12),restore=source+"-restore",image="ulda/server:deployment-"+id;
+const source="ulda-deploy-"+id.slice(0,12),restore=source+"-restore";
+const requestedImage=process.env.ULDA_TEST_IMAGE;
+assert.ok(!requestedImage||!requestedImage.startsWith("-"),"Invalid test image reference.");
+let image=requestedImage||"ulda/server:deployment-"+id;
 const env={...process.env,POSTGRES_USER:"ulda_test_admin",POSTGRES_DB:"ulda_test_"+id,
  ULDA_SECRETS_DIR:path.join(folder,"secrets"),ULDA_SERVER_IMAGE:image,ULDA_SERVER_PORT:"0",
  ULDA_TLS_PORT:"0",ULDA_TLS_PUBLISH_ADDRESS:"127.0.0.1",ULDA_PUBLISH_ADDRESS:"127.0.0.1",
@@ -76,10 +79,11 @@ async function main(){
  await import("../test/consumer/index.mjs");
  await run(process.execPath,["scripts/create-local-secrets.mjs"]);
  await docker("run","--rm","--mount","type=bind,source="+certs+",target=/out","--entrypoint","sh","postgres:18.4-bookworm","-c","openssl req -x509 -newkey rsa:2048 -nodes -days 1 -keyout /out/key.pem -out /out/cert.pem -subj /CN=localhost -addext subjectAltName=DNS:localhost,IP:127.0.0.1 && chmod 644 /out/key.pem /out/cert.pem");
- phase="build";await docker("build","-t",image,".");results.imageId=await docker("image","inspect",image,"--format","{{.Id}}");
+ phase="build";if(!requestedImage)await docker("build","-t",image,".");results.imageId=await docker("image","inspect",image,"--format","{{.Id}}");
+ image=results.imageId;env.ULDA_SERVER_IMAGE=image;
  env.ULDA_TEST_IMAGE=image;
  await run(process.execPath,["--test","test/container/image.test.mjs","test/container/context.test.mjs"]);
- pass("image build and four container checks");
+ pass("local image artifact and container checks");
  phase="new-volume";await startDb(source);
  await expectFailure(()=>dc(source,"run","--rm","--no-deps","db-setup"));
  const runtimeSecret=path.join(env.ULDA_SECRETS_DIR,"postgres_runtime_password"),originalSecret=fs.readFileSync(runtimeSecret);

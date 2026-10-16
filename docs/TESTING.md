@@ -71,5 +71,7 @@ observe memory, queues, slow receivers and recovery after overload.
 
 This target is an acceptance criterion, not a published measurement or a universal
 capacity guarantee. Historical benchmark applications and machine-specific results
-are not included in this source distribution. A reproducible load campaign for the
-final release image is separate work; do not substitute a unit-test result for it.
+are not included in this source distribution. The [capacity runner](CAPACITY_TESTING.md)
+measures 100 independent connections without a fixed update rate, on a disposable
+stack. This closed-loop measurement and a fixed-rate acceptance run answer different
+questions; do not substitute either a unit test or a short peak for a sustained run.

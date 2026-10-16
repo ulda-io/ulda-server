@@ -12,7 +12,10 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 process.chdir(root);
 const id = randomUUID().replaceAll("-", ""), label = `io.ulda.integration=${id}`;
 const network = `ulda-test-${id}`, db = `${network}-db`, app = `${network}-server`;
-const image = `ulda/server:sdk-check-${id}`, folder = path.join(root, ".local", `integration-${id}`);
+const requestedImage = process.env.ULDA_TEST_IMAGE;
+assert.ok(!requestedImage || !requestedImage.startsWith("-"), "Invalid test image reference.");
+let image = requestedImage || `ulda/server:sdk-check-${id}`;
+const folder = path.join(root, ".local", `integration-${id}`);
 fs.mkdirSync(folder, { recursive: true });
 const env = { ...process.env, POSTGRES_USER: "ulda_test", POSTGRES_DB: `ulda_test_${id}`,
   POSTGRES_PASSWORD: randomUUID(), ULDA_TEST_ALLOW_RESET: "1", ULDA_TEST_RESULTS_DIR: folder };
@@ -55,14 +58,15 @@ async function main() {
   // build's clean is confined to this checkout, never a linked dist directory.
   if (fs.existsSync("dist")) assert.equal(fs.realpathSync("dist"), path.resolve("dist"));
   await run(process.execPath, [process.env.npm_execpath, "run", "check"]);
-  await run(process.execPath, ["--test", "test/support/safety.test.mjs"]);
+  await run(process.execPath, ["--test", "test/support/safety.test.mjs", "test/load/metrics.test.mjs"]);
   passed("server typecheck/unit/build and test safety checks");
   phase = "image-build";
-  await docker("build", "-t", image, ".");
+  if (!requestedImage) await docker("build", "-t", image, ".");
   result.imageId = await docker("image", "inspect", image, "--format", "{{.Id}}");
+  image = result.imageId; // Validate exactly this local artifact, even if a tag moves.
   env.ULDA_TEST_IMAGE = image;
   await run(process.execPath, ["--test", "test/container/image.test.mjs", "test/container/context.test.mjs"]);
-  passed("self-contained image build and container regressions");
+  passed("local image artifact and container regressions");
   phase = "disposable-database";
   await docker("network", "create", "--label", label, network); networkCreated = true;
   await docker("run", "--detach", "--name", db, "--label", label, "--network", network, "--network-alias", "postgres",

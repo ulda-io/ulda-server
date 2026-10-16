@@ -18,7 +18,7 @@ there is no adjacent checkout fallback in these tests. `ULDA_SDK_CONSUMER` does
 not override this release integration path.
 
 The command runs server typecheck/unit/build, test-safety checks, a self-contained
-Docker build and four container regressions. It creates a unique Docker network
+Docker build and five container regressions. It creates a unique Docker network
 and PostgreSQL database, runs real database faults and SDK tests, then checks the
 built container with two SDK clients, X/S content and server/database restarts.
 The server runs as non-root with the same filesystem/capability restrictions as
@@ -30,6 +30,9 @@ native tests. Its data is disposable. Cleanup verifies a unique Docker label
 before removing test containers/anonymous volumes and the test network. The local
 test image is retained for inspection; it is never published or deployed over the
 operator's image. Summary JSON files are written under `.local/integration-*`.
+Set `ULDA_TEST_IMAGE` to a previously reviewed local image to skip rebuilding;
+the suite resolves and uses its immutable local image ID. The deployment drill
+accepts the same option, so its tests can validate the exact scanned artifact.
 Do not run multiple writers against the same database outside these sequential
 test phases.
 

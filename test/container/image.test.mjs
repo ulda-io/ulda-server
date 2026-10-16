@@ -80,3 +80,22 @@ test("image healthcheck honors SERVER_PORT instead of probing only port 3000", (
   `, ["--read-only", "-e", "SERVER_PORT=4087"]);
   assert.deepEqual(result, { ok: true });
 });
+
+test("runtime contains no setuid/setgid files or Perl/util-linux packages", () => {
+  const result = probe(`
+    import fs from 'node:fs';
+    const elevated=[];
+    const walk=dir=>{for(const entry of fs.readdirSync(dir,{withFileTypes:true})){
+      const file=dir+'/'+entry.name;if(entry.isSymbolicLink())continue;
+      if(entry.isDirectory())walk(file);else if(entry.isFile()&&(fs.statSync(file).mode&0o6000))elevated.push(file);
+    }};
+    for(const dir of ['/usr','/bin','/sbin','/app'])walk(dir);
+    // BusyBox can provide a same-named applet; test the affected package identity.
+    const packages=fs.readFileSync('/lib/apk/db/installed','utf8').split(String.fromCharCode(10))
+      .filter(line=>line.startsWith('P:')).map(line=>line.slice(2));
+    console.log(JSON.stringify({elevated,excluded:packages.filter(name=>/^(perl|util-linux|libmount|libblkid)(-|$)/.test(name)),alpine:fs.existsSync('/etc/alpine-release')}));
+  `);
+  assert.deepEqual(result.elevated, []);
+  assert.deepEqual(result.excluded, []);
+  assert.equal(result.alpine, true);
+});

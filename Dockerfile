@@ -1,8 +1,7 @@
-FROM node:24.18.1-bookworm-slim AS base
+FROM node:24.18.1-alpine3.24@sha256:f70403e87646dc51b45295f4b8b70cdad0b63d2297c4c9899119b03f7af7a6b3 AS base
 
-# Apply available OS security updates in both build and runtime stages.
-RUN apt-get update && apt-get upgrade -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+# Apply available Alpine security updates in both build and runtime stages.
+RUN apk upgrade --no-cache
 
 FROM base AS build
 
@@ -28,6 +27,9 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force \
 COPY --from=build /app/dist ./dist
 COPY migrations ./migrations
 COPY LICENSE.md THIRD_PARTY_NOTICES.md ./
+
+# No operating-system utility needs setuid/setgid in this service image.
+RUN find /usr /bin /sbin -xdev -type f -perm /6000 -exec chmod a-s {} +
 
 # Application files remain root-owned and readable by the runtime user.
 USER node

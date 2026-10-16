@@ -8,3 +8,8 @@
 - Bounded admission, safe diagnostics, database role separation and container
   deployment with migration, TLS and recovery instructions.
 - Unit, PostgreSQL, published SDK and container regression suites.
+- Digest-pinned Alpine runtime with OS updates, preserved package metadata and
+  setuid/setgid permissions removed from system executables.
+- Integration and deployment checks can reuse one reviewed local image ID.
+- Isolated capacity runner with published SDK clients, uncapped sequential
+  updates, latency/resource measurements and final persisted-state verification.

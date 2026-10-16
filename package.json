@@ -20,9 +20,10 @@
     "smoke:socket": "node scripts/smoke-socket.mjs",
     "check": "npm run typecheck && npm test && npm run build",
     "test:sdk": "npm run build && node --test --test-concurrency=1 --test-reporter=./test/support/safe-reporter.mjs test/e2e/sdk.test.mjs test/e2e/release-faults.test.mjs",
-    "test:tools": "node --test test/support/safety.test.mjs",
+    "test:tools": "node --test test/support/safety.test.mjs test/load/metrics.test.mjs",
     "test:integration": "node scripts/check-published-sdk.mjs",
-    "test:deployment": "node scripts/check-deployment.mjs"
+    "test:deployment": "node scripts/check-deployment.mjs",
+    "test:capacity": "node scripts/check-capacity.mjs"
   },
   "dependencies": {
     "pg": "8.22.0",

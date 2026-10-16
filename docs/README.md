@@ -20,6 +20,9 @@
 
 ## Develop and verify
 
+- [Capacity measurement](CAPACITY_TESTING.md): 100 SDK connections without a target
+  update rate; disposable stack, latency, resource use and final-state verification.
+
 - [Testing](TESTING.md): prerequisites, commands, isolation and validation scope.
 - [Source walkthrough](../SERVER_WALKTHROUGH.md).
 - [Published SDK integration](PUBLISHED_SDK_TESTS.md): isolated tests using the

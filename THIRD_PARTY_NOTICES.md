@@ -58,17 +58,17 @@ it is not a server runtime dependency.
 
 ## Container and external services
 
-The Node.js/Debian base image has separately licensed components. Node's
-distribution includes its own licenses; Debian package copyright and license
-notices are under `/usr/share/doc/<package>/copyright` where supplied by the
-base distribution. Preserve the base image's notices and comply with each
+The Node.js/Alpine base image has separately licensed components. Node's
+distribution includes its own licenses; installed Alpine package names, versions
+and license identifiers are recorded in `/lib/apk/db/installed`. Preserve notices
+supplied by the base distribution and dependencies, and comply with each
 component's redistribution terms, including source obligations where applicable.
 This npm dependency index is not an inventory of every operating-system package.
 
 PostgreSQL and the optional Nginx proxy run as separate images. Their source,
 binaries and image layers are not relicensed by the ULDA Server license.
 See the upstream [Node.js license](https://github.com/nodejs/node/blob/main/LICENSE),
-[Debian copyright information](https://www.debian.org/doc/debian-policy/ch-docs.html#copyright-information),
+[Alpine package sources](https://gitlab.alpinelinux.org/alpine/aports),
 [PostgreSQL license](https://www.postgresql.org/about/licence/) and
 [Nginx license](https://nginx.org/LICENSE).
 
