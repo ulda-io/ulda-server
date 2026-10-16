@@ -9,6 +9,7 @@ import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { Histogram, loadOptions } from "../test/load/metrics.mjs";
+import { auxiliaryImages } from "../test/support/auxiliary-images.mjs";
 
 const root=fileURLToPath(new URL("../",import.meta.url));process.chdir(root);
 const options=loadOptions(process.env), requestedImage=process.env.ULDA_TEST_IMAGE;
@@ -38,6 +39,8 @@ async function until(check,timeout=60000){const end=Date.now()+timeout;do{try{if
 async function waitFor(predicate,timeout){const end=Date.now()+timeout;while(!predicate()){if(children.some(c=>c.failed)||Date.now()>end)throw new Error("Capacity worker failed or timed out");await new Promise(r=>setTimeout(r,100));}}
 async function main(){
   result.imageId=await docker("image","inspect",requestedImage,"--format","{{.Id}}");env.ULDA_SERVER_IMAGE=result.imageId;
+  result.auxiliaryImages=await auxiliaryImages(docker,id);
+  env.ULDA_POSTGRES_IMAGE=result.auxiliaryImages.postgres.id;
   result.consumerLockSha256=createHash("sha256").update(fs.readFileSync("test/consumer/package-lock.json")).digest("hex");
   result.docker=JSON.parse(await docker("info","--format",'{"cpus":{{.NCPU}},"memoryBytes":{{.MemTotal}}}'));
   await run(process.execPath,["scripts/create-local-secrets.mjs"]);

@@ -111,3 +111,7 @@ before `npm run test:integration` or `npm run test:deployment`. Both resolve the
 reference to a local image ID before use. A clean scan applies to that artifact
 and the scanner database at that time, not to every future build or the separate
 PostgreSQL/Nginx images. Do not suppress findings by deleting package metadata.
+
+The [auxiliary image policy](AUXILIARY_IMAGES.md) describes the separate
+PostgreSQL and Nginx builds, remaining package-level exposure and checks for
+updating an existing PostgreSQL 18 volume.

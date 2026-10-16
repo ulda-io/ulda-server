@@ -13,6 +13,7 @@ image, then run from the repository root with Linux Docker available:
 
 ```powershell
 $env:ULDA_TEST_IMAGE='ulda/server:security-check'
+$env:ULDA_TEST_POSTGRES_IMAGE='ulda/postgres:security-check'
 $env:ULDA_LOAD_CLIENTS='100'
 $env:ULDA_LOAD_WORKERS='4'
 $env:ULDA_LOAD_SECONDS='1800'
@@ -21,7 +22,8 @@ $env:ULDA_LOAD_PROFILE='host'
 npm run test:capacity
 ```
 
-The image must already exist locally. The runner resolves its ID, creates a fresh
+The specified images must already exist locally. Without a database override,
+the runner builds a task-specific database image. It resolves image IDs, creates a fresh
 uniquely named Compose project, generates separate password files, initializes
 least-privilege database roles and migrates a new volume. It never accepts a target
 server/database URL and never reads the operator's `.env`. The existing running

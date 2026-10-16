@@ -29,6 +29,11 @@ without printing them or overwriting existing files. Configure a different
 It does not read `.env` itself. Do not regenerate passwords for an existing
 database: changing a mounted file does not change the database's stored password.
 
+The build creates both the application and its PostgreSQL image. PostgreSQL stays
+on version 18 and Debian bookworm/glibc. The TLS overlay adds a separate slim
+Nginx build. See [auxiliary images](AUXILIARY_IMAGES.md) for package choices,
+immutable image overrides and database minor-update checks.
+
 Protect the directory with host filesystem permissions. Compose file secrets are
 bind mounts, not an encrypted vault. Their host permissions must allow the
 container reader: Node UID 1000 for runtime/migration, and proxy UID 101 for its
@@ -120,6 +125,7 @@ CORS_ORIGINS=https://your-application.example
 Then use **both files for subsequent lifecycle commands**:
 
 ```powershell
+docker compose -f compose.yaml -f deploy/compose.tls.yaml build proxy
 docker compose -f compose.yaml -f deploy/compose.tls.yaml up -d --no-build
 ```
 
@@ -266,3 +272,13 @@ Successful runs remove temporary secrets, certificates, the dump and SDK state;
 failed runs retain them under ignored .local for local inspection. Synthetic
 credentials are not production credentials. The drill does not replace
 final load, real certificate renewal, browser or independent security review.
+
+The runner builds task-specific PostgreSQL/Nginx tags unless explicit
+`ULDA_TEST_POSTGRES_IMAGE` and `ULDA_TEST_PROXY_IMAGE` references are supplied.
+All three image IDs are saved in the result. Optionally set
+`ULDA_TEST_PREVIOUS_POSTGRES_IMAGE` to a locally available older **18.x bookworm**
+image: the source test volume starts with that image, then is reopened with the
+new image before restoring its backup into another fresh volume. The drill
+compares locale/collation metadata, sequence state and SDK ciphertext. It never
+upgrades an operator's database. Major-version or libc changes require a separate
+migration procedure.

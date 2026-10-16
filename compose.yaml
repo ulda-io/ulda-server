@@ -25,7 +25,10 @@ x-postgres-client-environment: &postgres-client-environment
 
 services:
   postgres:
-    image: postgres:18.4-bookworm
+    image: "${ULDA_POSTGRES_IMAGE:-ulda/postgres:local}"
+    build:
+      context: ./deploy/postgres
+    security_opt: [no-new-privileges:true]
     environment:
       POSTGRES_DB: "${POSTGRES_DB:-ulda}"
       POSTGRES_USER: "${POSTGRES_USER:-ulda}"

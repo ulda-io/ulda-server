@@ -33,6 +33,11 @@ operator's image. Summary JSON files are written under `.local/integration-*`.
 Set `ULDA_TEST_IMAGE` to a previously reviewed local image to skip rebuilding;
 the suite resolves and uses its immutable local image ID. The deployment drill
 accepts the same option, so its tests can validate the exact scanned artifact.
+`ULDA_TEST_POSTGRES_IMAGE` selects the reviewed database image; the deployment
+drill also accepts `ULDA_TEST_PROXY_IMAGE`. Otherwise each runner builds its own
+uniquely named auxiliary images from `deploy/`. References resolve to immutable
+local IDs recorded in the report. Tests do not inherit the operator's Compose
+image variables. See [auxiliary image checks](AUXILIARY_IMAGES.md).
 Do not run multiple writers against the same database outside these sequential
 test phases.
 

@@ -3,7 +3,9 @@ services:
   server:
     ports: !reset []
   proxy:
-    image: nginx@sha256:73c75df4075c918f91017fdda46ad81e55e5af77ba3a64ca3d5014bd9244fe7f
+    image: "${ULDA_PROXY_IMAGE:-ulda/proxy:local}"
+    build:
+      context: ./deploy/proxy
     user: "101:101"
     entrypoint: [nginx]
     command: ["-g", "daemon off;"]

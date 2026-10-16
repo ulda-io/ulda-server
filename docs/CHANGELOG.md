@@ -13,3 +13,7 @@
 - Integration and deployment checks can reuse one reviewed local image ID.
 - Isolated capacity runner with published SDK clients, uncapped sequential
   updates, latency/resource measurements and final persisted-state verification.
+- Separate digest-pinned PostgreSQL 18 bookworm and stable slim Nginx builds;
+  updated OS packages and rebuilt gosu, without unused JIT/XML/image tooling.
+- Auxiliary image checks and an optional same-major database upgrade drill,
+  followed by SDK verification and backup restoration into a separate volume.

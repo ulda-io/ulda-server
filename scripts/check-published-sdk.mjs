@@ -7,6 +7,7 @@ import { randomUUID, createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { auxiliaryImages } from "../test/support/auxiliary-images.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 process.chdir(root);
@@ -68,9 +69,10 @@ async function main() {
   await run(process.execPath, ["--test", "test/container/image.test.mjs", "test/container/context.test.mjs"]);
   passed("local image artifact and container regressions");
   phase = "disposable-database";
+  result.auxiliaryImages = await auxiliaryImages(docker, id);
   await docker("network", "create", "--label", label, network); networkCreated = true;
   await docker("run", "--detach", "--name", db, "--label", label, "--network", network, "--network-alias", "postgres",
-    "--publish", "127.0.0.1::5432", "--mount", "type=volume,destination=/var/lib/postgresql", "-e", "POSTGRES_USER", "-e", "POSTGRES_DB", "-e", "POSTGRES_PASSWORD", "postgres:18.4-bookworm");
+    "--publish", "127.0.0.1::5432", "--mount", "type=volume,destination=/var/lib/postgresql", "--security-opt", "no-new-privileges:true", "-e", "POSTGRES_USER", "-e", "POSTGRES_DB", "-e", "POSTGRES_PASSWORD", result.auxiliaryImages.postgres.id);
   await until(async () => (await docker("exec", db, "psql", "-U", env.POSTGRES_USER, "-d", env.POSTGRES_DB, "-At", "-c", "SELECT 1")) === "1");
   const ports = await inspect(db, ".NetworkSettings.Ports");
   env.ULDA_TEST_DATABASE_URL = `postgres://${env.POSTGRES_USER}:${env.POSTGRES_PASSWORD}@127.0.0.1:${ports["5432/tcp"][0].HostPort}/${env.POSTGRES_DB}`;

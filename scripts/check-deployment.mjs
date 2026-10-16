@@ -6,6 +6,7 @@ import {randomUUID,createHash} from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
+import {auxiliaryImages} from "../test/support/auxiliary-images.mjs";
 const root=fileURLToPath(new URL("../",import.meta.url));process.chdir(root);
 const id=randomUUID().replaceAll("-",""),folder=path.join(root,".local","deployment-"+id);
 fs.mkdirSync(folder,{recursive:true});fs.writeFileSync(path.join(folder,"empty.env"),"");
@@ -77,14 +78,30 @@ async function securityChecks(project){
 }
 async function main(){
  await import("../test/consumer/index.mjs");
+ results.auxiliaryImages=await auxiliaryImages(docker,id,true);
+ env.ULDA_POSTGRES_IMAGE=results.auxiliaryImages.postgres.id;
+ env.ULDA_PROXY_IMAGE=results.auxiliaryImages.proxy.id;
+ env.ULDA_TEST_POSTGRES_IMAGE=results.auxiliaryImages.postgres.id;
+ env.ULDA_TEST_PROXY_IMAGE=results.auxiliaryImages.proxy.id;
+ await run(process.execPath,["--test","test/container/auxiliary.test.mjs"]);
+ pass("auxiliary image privileges, backup tools, package removal and license retention");
+ const previous=process.env.ULDA_TEST_PREVIOUS_POSTGRES_IMAGE;
+ if(previous){
+  assert.ok(!previous.startsWith("-"),"Invalid previous image reference.");
+  results.previousPostgresImageId=await docker("image","inspect",previous,"--format","{{.Id}}");
+ }
  await run(process.execPath,["scripts/create-local-secrets.mjs"]);
- await docker("run","--rm","--mount","type=bind,source="+certs+",target=/out","--entrypoint","sh","postgres:18.4-bookworm","-c","openssl req -x509 -newkey rsa:2048 -nodes -days 1 -keyout /out/key.pem -out /out/cert.pem -subj /CN=localhost -addext subjectAltName=DNS:localhost,IP:127.0.0.1 && chmod 644 /out/key.pem /out/cert.pem");
+ await docker("run","--rm","--mount","type=bind,source="+certs+",target=/out","--entrypoint","sh",results.auxiliaryImages.postgres.id,"-c","openssl req -x509 -newkey rsa:2048 -nodes -days 1 -keyout /out/key.pem -out /out/cert.pem -subj /CN=localhost -addext subjectAltName=DNS:localhost,IP:127.0.0.1 && chmod 644 /out/key.pem /out/cert.pem");
  phase="build";if(!requestedImage)await docker("build","-t",image,".");results.imageId=await docker("image","inspect",image,"--format","{{.Id}}");
  image=results.imageId;env.ULDA_SERVER_IMAGE=image;
  env.ULDA_TEST_IMAGE=image;
  await run(process.execPath,["--test","test/container/image.test.mjs","test/container/context.test.mjs"]);
  pass("local image artifact and container checks");
+ if(previous)env.ULDA_POSTGRES_IMAGE=results.previousPostgresImageId;
  phase="new-volume";await startDb(source);
+ const collationQuery="SELECT datlocprovider,datcollate,datctype,datcollversion,pg_database_collation_actual_version(oid) FROM pg_database WHERE datname=current_database()";
+ results.initialDatabaseVersion=await sql(source,"SHOW server_version");
+ const initialCollation=await sql(source,collationQuery);
  await expectFailure(()=>dc(source,"run","--rm","--no-deps","db-setup"));
  const runtimeSecret=path.join(env.ULDA_SECRETS_DIR,"postgres_runtime_password"),originalSecret=fs.readFileSync(runtimeSecret);
  fs.writeFileSync(runtimeSecret,fs.readFileSync(path.join(env.ULDA_SECRETS_DIR,"postgres_admin_password")));
@@ -106,6 +123,17 @@ async function main(){
  await dc(source,"cp","postgres:/tmp/ulda.dump",path.join(folder,"ulda.dump"));
  results.backupSha256=createHash("sha256").update(fs.readFileSync(path.join(folder,"ulda.dump"))).digest("hex");
  await dc(source,"stop","postgres");
+ env.ULDA_POSTGRES_IMAGE=results.auxiliaryImages.postgres.id;
+ if(previous){
+  phase="minor-upgrade";await startDb(source);
+  results.upgradedDatabaseVersion=await sql(source,"SHOW server_version");
+  assert.equal(results.initialDatabaseVersion.split(".")[0],results.upgradedDatabaseVersion.split(".")[0]);
+  assert.equal(await sql(source,collationQuery),initialCollation);
+  assert.equal(await sql(source,"SELECT last_value,is_called FROM public.ulda_resources_id_seq"),sequence);
+  await dc(source,"up","-d","--no-build","server","proxy");await ready(source);await smoke("check");
+  await dc(source,"stop","proxy","server","postgres");
+  pass("same-major image upgrade on the existing test volume preserves collation, sequence and SDK ciphertext");
+ }
  phase="restore";await startDb(restore);
  await dc(restore,"cp",path.join(folder,"ulda.dump"),"postgres:/tmp/ulda.dump");
  await dc(restore,"exec","-T","postgres","pg_restore","-U",env.POSTGRES_USER,"-d",env.POSTGRES_DB,"--exit-on-error","--single-transaction","--no-owner","--no-acl","/tmp/ulda.dump");

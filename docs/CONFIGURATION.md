@@ -12,6 +12,8 @@ process does not automatically load that file. Never commit real credentials.
 | POSTGRES_USER | ulda | Bootstrap administrator, not the application account |
 | ULDA_SECRETS_DIR | ./secrets | Directory containing the three password files |
 | ULDA_SERVER_IMAGE | ulda/server:local | Image used by setup, migrations and runtime |
+| ULDA_POSTGRES_IMAGE | ulda/postgres:local | Locally built PostgreSQL image; use a reviewed digest for deployment |
+| ULDA_PROXY_IMAGE | ulda/proxy:local | Locally built slim Nginx image, used with the TLS overlay |
 | ULDA_PUBLISH_ADDRESS | 127.0.0.1 | Host address publishing the application's local HTTP port |
 | ULDA_SERVER_PORT | 3000 | Host HTTP port; container port remains 3000 |
 | ULDA_TLS_CERT_FILE | required with TLS overlay | Certificate chain path on host |
