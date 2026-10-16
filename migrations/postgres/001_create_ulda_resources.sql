@@ -1,0 +1,5 @@
+CREATE TABLE public.ulda_resources (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  witness BYTEA NOT NULL,
+  payload BYTEA NOT NULL
+);

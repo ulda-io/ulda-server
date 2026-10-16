@@ -1,0 +1,160 @@
+name: ulda-server
+
+x-ulda-image: &ulda-image
+  image: "${ULDA_SERVER_IMAGE:-ulda/server:local}"
+  build:
+    context: .
+    dockerfile: Dockerfile
+    target: runtime
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 128
+
+x-postgres-client-environment: &postgres-client-environment
+  PGHOST: postgres
+  PGPORT: "5432"
+  PGDATABASE: "${POSTGRES_DB:-ulda}"
+  PGPASSWORD_FILE: /run/secrets/db_password
+  DATABASE_POOL_MAX: "10"
+  DATABASE_CONNECTION_TIMEOUT_MS: "5000"
+  DATABASE_IDLE_TIMEOUT_MS: "30000"
+  DATABASE_STATEMENT_TIMEOUT_MS: "${DATABASE_STATEMENT_TIMEOUT_MS:-10000}"
+  DATABASE_LOCK_TIMEOUT_MS: "${DATABASE_LOCK_TIMEOUT_MS:-5000}"
+  DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS: "${DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS:-10000}"
+
+services:
+  postgres:
+    image: postgres:18.4-bookworm
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-ulda}"
+      POSTGRES_USER: "${POSTGRES_USER:-ulda}"
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_admin_password
+    secrets: [db_admin_password]
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 256
+    command: ["postgres", "-c", "max_connections=40", "-c", "shared_buffers=128MB"]
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    networks:
+      - database
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+  db-setup:
+    <<: *ulda-image
+    profiles: [admin]
+    command: ["node", "dist/cli/setup-postgres-roles.js"]
+    environment:
+      <<: *postgres-client-environment
+      PGUSER: "${POSTGRES_USER:-ulda}"
+      PGPASSWORD_FILE: /run/secrets/db_admin_password
+      ULDA_MIGRATION_PASSWORD_FILE: /run/secrets/db_migration_password
+      ULDA_RUNTIME_PASSWORD_FILE: /run/secrets/db_runtime_password
+    secrets: [db_admin_password, db_migration_password, db_runtime_password]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [database]
+    restart: "no"
+
+  migrate:
+    <<: *ulda-image
+    command: ["node", "dist/cli/migrate-postgres.js"]
+    environment:
+      <<: *postgres-client-environment
+      NODE_ENV: production
+      MIGRATIONS_DIR: /app/migrations/postgres
+      PGUSER: ulda_migrator
+      ULDA_MANAGED_ROLES: "1"
+      DATABASE_POOL_MAX: "2"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - database
+    secrets:
+      - source: db_migration_password
+        target: db_password
+    restart: "no"
+
+  server:
+    <<: *ulda-image
+    mem_limit: 1g
+    cpus: 1.0
+    environment:
+      <<: *postgres-client-environment
+      NODE_ENV: production
+      PGUSER: ulda_runtime
+      NODE_OPTIONS: --max-old-space-size=512
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: "3000"
+      LOG_LEVEL: info
+      READINESS_TIMEOUT_MS: "${READINESS_TIMEOUT_MS:-2000}"
+      READINESS_CACHE_MS: "${READINESS_CACHE_MS:-1000}"
+      READINESS_MAX_WAITERS: "${READINESS_MAX_WAITERS:-32}"
+      GRACEFUL_SHUTDOWN_TIMEOUT_MS: "${GRACEFUL_SHUTDOWN_TIMEOUT_MS:-10000}"
+      CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:3000}"
+      ULDA_CORE_VERSION: 1.0.1
+      MAX_BUFFERED_SOCKET_BYTES: "${MAX_BUFFERED_SOCKET_BYTES:-16777216}"
+      MAX_CONNECTIONS: "${MAX_CONNECTIONS:-1000}"
+      MAX_SUBSCRIPTIONS_TOTAL: "${MAX_SUBSCRIPTIONS_TOTAL:-100000}"
+      MAX_INFLIGHT_BYTES: "${MAX_INFLIGHT_BYTES:-67108864}"
+      MAX_ACTIVE_READ_BYTES: "${MAX_ACTIVE_READ_BYTES:-268435456}"
+      MAX_BUFFERED_TOTAL_BYTES: "${MAX_BUFFERED_TOTAL_BYTES:-67108864}"
+      MAX_PENDING_COMMANDS_PER_SOCKET: "${MAX_PENDING_COMMANDS_PER_SOCKET:-64}"
+      MAX_COMMANDS_PER_SECOND: "${MAX_COMMANDS_PER_SECOND:-1000}"
+      COMMAND_BURST: "${COMMAND_BURST:-2000}"
+      BINARY_PACKET_TIMEOUT_MS: "${BINARY_PACKET_TIMEOUT_MS:-30000}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    secrets:
+      - source: db_runtime_password
+        target: db_password
+    init: true
+    ports:
+      - "${ULDA_PUBLISH_ADDRESS:-127.0.0.1}:${ULDA_SERVER_PORT:-3000}:3000"
+    networks:
+      - database
+      - edge
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+volumes:
+  postgres_data:
+
+networks:
+  database:
+    internal: true
+  edge:
+
+secrets:
+  db_admin_password:
+    file: "${ULDA_SECRETS_DIR:-./secrets}/postgres_admin_password"
+  db_migration_password:
+    file: "${ULDA_SECRETS_DIR:-./secrets}/postgres_migration_password"
+  db_runtime_password:
+    file: "${ULDA_SECRETS_DIR:-./secrets}/postgres_runtime_password"

@@ -1,0 +1,42 @@
+{
+  "name": "@ulda/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Single-process ULDA server with Socket.IO and persistent PostgreSQL storage",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --exclude test/e2e/**",
+    "test:watch": "vitest",
+    "test:postgres": "vitest run --config vitest.postgres.config.ts",
+    "migrate:postgres": "node dist/cli/migrate-postgres.js",
+    "smoke:socket": "node scripts/smoke-socket.mjs",
+    "check": "npm run typecheck && npm test && npm run build",
+    "test:sdk": "npm run build && node --test --test-concurrency=1 --test-reporter=./test/support/safe-reporter.mjs test/e2e/sdk.test.mjs test/e2e/release-faults.test.mjs",
+    "test:tools": "node --test test/support/safety.test.mjs",
+    "test:integration": "node scripts/check-published-sdk.mjs",
+    "test:deployment": "node scripts/check-deployment.mjs"
+  },
+  "dependencies": {
+    "pg": "8.22.0",
+    "socket.io": "4.8.3",
+    "socket.io-parser": "4.2.7",
+    "ulda-core": "1.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "@types/pg": "8.21.0",
+    "socket.io-client": "4.8.3",
+    "tsx": "4.23.11",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  },
+  "license": "SEE LICENSE IN LICENSE.md"
+}

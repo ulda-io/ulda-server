@@ -1,0 +1,7 @@
+{
+  "name": "ulda-server-published-sdk-consumer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": { "ulda-auth": "1.0.1" }
+}
