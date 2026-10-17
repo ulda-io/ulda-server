@@ -31,7 +31,8 @@ assert.match(receipt.externalDatabase.contentIdentity, /^[a-f0-9]{64}$/);
 const id = randomUUID().replaceAll('-', ''), network = `ulda-release-${id}`, project = `${network}-app`;
 const db = `${network}-db`, label = `io.ulda.release-smoke=${id}`;
 const folder = path.resolve('.local', network), secretDir = path.join(folder, 'secrets');
-fs.mkdirSync(secretDir, { recursive: true });
+fs.mkdirSync(secretDir, { recursive: true, mode: 0o700 });
+if (process.platform !== 'win32') assert.equal(fs.statSync(secretDir).mode & 0o777, 0o700);
 const passwords = Object.fromEntries(['admin', 'migration', 'runtime'].map(role => [role, randomUUID()]));
 const secretPaths = Object.keys(passwords).map(role => path.join(secretDir, `postgres_${role}_password`));
 // Disposable file secrets must be readable by the non-root container user.

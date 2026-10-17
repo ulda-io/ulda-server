@@ -47,6 +47,20 @@ async function main(){
   result.consumerLockSha256=createHash("sha256").update(fs.readFileSync("test/consumer/package-lock.json")).digest("hex");
   result.docker=JSON.parse(await docker("info","--format",'{"cpus":{{.NCPU}},"memoryBytes":{{.MemTotal}}}'));
   await run(process.execPath,["scripts/create-local-secrets.mjs"]);
+  // Isolated test credentials only: keep host access behind a private directory,
+  // while allowing the non-root container to read the individual bind mounts.
+  if(process.platform!=="win32"){
+    assert.equal(fs.statSync(env.ULDA_SECRETS_DIR).mode&0o777,0o700);
+    for(const name of ["postgres_admin_password","postgres_migration_password","postgres_runtime_password"]){
+      const file=path.join(env.ULDA_SECRETS_DIR,name);
+      assert.ok(fs.lstatSync(file).isFile()&&!fs.lstatSync(file).isSymbolicLink());
+      fs.chmodSync(file,0o644);
+    }
+  }
+  phase="fixture-secret-mounts";created=true;
+  await dc("run","--rm","--no-deps","--entrypoint","node","db-setup","--input-type=module","-e",
+    "import assert from 'node:assert/strict';import fs from 'node:fs';assert.equal(process.getuid(),1000);for(const name of ['db_admin_password','db_migration_password','db_runtime_password'])fs.accessSync('/run/secrets/'+name,fs.constants.R_OK)");
+  console.log("PASS non-root capacity setup can read isolated test secret mounts");
   phase="database-start";created=true;await dc("up","-d","--no-build","postgres");await until(async()=>await sql("SELECT 1")==="1");
   phase="database-roles";
   await dc("run","--rm","--no-deps","-e","ULDA_DB_SETUP=1","db-setup");
