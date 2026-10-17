@@ -1,7 +1,7 @@
 # SDK wire protocol
 
 The default server implements the binary `ulda:*` contract used by
-`ulda-auth@1.0.1`. Socket.IO uses the root namespace and `/socket.io/` path.
+`ulda-auth@1.0.1` and the large-operation extension for newer clients. Socket.IO uses the root namespace and `/socket.io/` path.
 The configured protocol identifier `1.0` is not a server release number and
 is not repeated in every command.
 
@@ -17,7 +17,7 @@ not execute. Normal SDK calls handle Socket.IO framing and callbacks internally.
 - `witness`: public candidate bytes, a Socket.IO binary attachment.
 - `payload`: opaque bytes, a Socket.IO binary attachment.
 - Binary values are `Uint8Array`/`Buffer`, not Base64 strings.
-- Resource arrays are nonempty, at most 64 entries, with no duplicate IDs.
+- Ordinary CRUD arrays are nonempty, at most 64 entries, with no duplicate IDs.
 - Additional resource metadata is not accepted: no role, name, parent, password,
   origin, `baseWitness`, revision, `requestId`, `sessionId` or `watch`.
 
@@ -103,7 +103,8 @@ Successful Create, Read and Update subscribe before ACK. Mixed Delete subscribes
 its updated IDs. Subscription capacity is reserved before asynchronous storage,
 including concurrent commands on one connection. Errors add no new subscriptions.
 
-After commit, each other affected subscriber receives one `ulda:changed` event:
+After commit, each other affected subscriber receives one logical Changed event.
+When it fits ordinary framing, this is one `ulda:changed` event:
 
 ```js
 {
@@ -127,6 +128,9 @@ is no guarantee whether a subscriber observes Changed before the writer sees
 its ACK. Reconnect followed by Read restores current state and subscriptions.
 
 ## Errors and unknown outcomes
+
+See [large-operation transfer](#large-operation-extension) for staging and
+fragmented read/notification rules. Those rules do not change Commit uncertainty.
 
 A definite failure before storage mutation returns:
 
@@ -186,7 +190,71 @@ are in [admission limits](ADMISSION_LIMITS.md). A slow or overloaded receiver ma
 be disconnected; a committed mutation remains committed. Budgets are not exact
 RSS or complete abuse protection.
 
-## Legacy boundary
+## Large-operation extension
+
+Clients advertise Socket.IO handshake `auth: {uldaTransfer:1}` to receive
+fragmented notifications. This flag is a framing capability, not authentication.
+Resources remain exactly ID, witness and opaque payload; no catalog role is added.
+Ordinary CRUD remains compatible with 1.0.1 for its original supported sizes.
+
+`ulda:transfer` accepts one exact body plus an ACK callback:
+
+| Body | Successful ACK |
+|---|---|
+| `{kind:'begin',action:'create'\|'update'\|'delete',count}` | `{ok:true,token}` |
+| `{kind:'append',token,items}` | `{ok:true}` |
+| `{kind:'part',token,resourceId?,witness,total,offset,payload}` | `{ok:true}` |
+| `{kind:'commit',token}` | Original action's ACK: Create returns IDs; Update/Delete return `{ok:true}` |
+| `{kind:'cancel',token}` | `{ok:true}` |
+| `{kind:'read',resourceId,offset}` | `{ok:true,data:{id,witness,payload,total,offset}}` |
+
+A random 32-character lowercase hexadecimal token identifies one upload on one
+connection. It is neither a durable operation ID nor an idempotency key. Begin
+counts must fit the Router's total-key budget; Create remains at most 64 records.
+Append uses the ordinary action entry shape, at most 64 items and 8 MiB of binary
+data. A Delete append may contain only update entries, but its completed operation
+must contain at least one deletion. Duplicate resource IDs are rejected.
+
+Part carries at most 1 MiB of ciphertext. Omit resourceId only for Create.
+Total/offset are byte counts; each resource begins at offset zero and continues
+contiguously with the same ID, witness and total. All data must fit resource,
+logical-operation and shared staging budgets before allocation/copying.
+
+Begin/Append/Part never mutate storage or open a database transaction. Commit
+requires the complete upload, obtains all affected Router keys, validates current
+rows in groups of at most 64, then invokes storage once for the entire operation.
+A late conflict rejects every mutation. Updated IDs are subscribed before ACK;
+Changed is published only after commit. Accepted Commit may finish after a
+disconnect; its reservations remain owned until it finishes.
+
+One connection can hold one upload and one large read. Upload expiry, Cancel,
+malformed staged data or disconnect clears uncommitted staging. The absolute
+deadline is not renewed by each part. Missing Commit ACK is an unknown outcome,
+never permission to replay. An interrupted pre-Commit upload cannot itself commit.
+
+Ordinary Read still accepts at most 64 IDs and returns one complete ACK. The SDK
+divides larger catalogs into sequential ID arrays and reduces a group on an
+explicit `too_large` response. The server never streams an unbounded ID array.
+For an oversized singleton, Read offset zero pins a bounded ciphertext snapshot;
+subsequent offsets return at most 1 MiB from that same witness/version. Last part,
+expiry or disconnect releases it. New reads after completion may see newer state.
+Separate resource reads are not one global database snapshot.
+
+Large Changed uses `ulda:changed.part` with ordered frames:
+`{kind:'begin',count}`, then `{kind:'append',items}` and/or
+`{kind:'part',resourceId,witness,total,offset,payload}`, then `{kind:'end'}`.
+Append entries are updated `{id,witness,payload}` or deleted `{id}`.
+Each recipient receives only its subscribed resources. No client ACK is required.
+The SDK reassembles and verifies the complete event before publishing local state.
+All frames of a logical notification are enqueued together; ordinary output
+budgets still apply and can disconnect a slow or overloaded recipient.
+
+If a notification cannot fit ordinary framing and its recipient did not advertise
+the capability, the server disconnects that recipient rather than silently
+leaving stale state. Upgrade all clients sharing a catalog before exceeding the
+old SDK limits. There is no encrypted-format migration or nested-catalog logic.
+
+## Legacy protocol boundary
 
 The historical `resource:*` / Base64 API is available only through explicit
 `createUldaServer({protocol:"legacy"})` in tests/benchmarks. Production does not

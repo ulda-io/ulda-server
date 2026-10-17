@@ -44,6 +44,10 @@ export interface AppConfig {
     maxCommandsPerSecond: number;
     commandBurst: number;
     binaryPacketTimeoutMs: number;
+    maxResourceBytes: number;
+    maxTransferBytes: number;
+    maxStagedBytes: number;
+    transferTimeoutMs: number;
   };
   readiness: { timeoutMs: number; cacheMs: number; maxWaiters: number };
   gracefulShutdownTimeoutMs: number;
@@ -176,6 +180,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       maxCommandsPerSecond: readInteger(env, "MAX_COMMANDS_PER_SECOND", 1000, { min: 1, max: 100_000 }),
       commandBurst: readInteger(env, "COMMAND_BURST", 2000, { min: 1, max: 100_000 }),
       binaryPacketTimeoutMs: readInteger(env, "BINARY_PACKET_TIMEOUT_MS", 30_000, { min: 100, max: 300_000 }),
+      maxResourceBytes: readInteger(env, "MAX_RESOURCE_BYTES", 64 * 1_048_576, { min: 1_100_000, max: 64 * 1_048_576 }),
+      maxTransferBytes: readInteger(env, "MAX_TRANSFER_BYTES", 128 * 1_048_576, { min: 1024, max: 128 * 1_048_576 }),
+      maxStagedBytes: readInteger(env, "MAX_STAGED_BYTES", 256 * 1_048_576, { min: 1024, max: 2 ** 32 }),
+      transferTimeoutMs: readInteger(env, "TRANSFER_TIMEOUT_MS", 60_000, { min: 100, max: 300_000 }),
       maxWitnessBytes: readInteger(env, "MAX_WITNESS_BYTES", 16_384, {
         min: 1,
         max: 1_048_576,
@@ -187,7 +195,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       maxSubscriptionsPerSocket: readInteger(
         env,
         "MAX_SUBSCRIPTIONS_PER_SOCKET",
-        10_000,
+        32_768,
         { min: 1, max: 100_000 },
       ),
       maxQueuedPerResource: readInteger(
@@ -196,7 +204,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         100,
         { min: 1, max: 100_000 },
       ),
-      maxQueuedTotal: readInteger(env, "MAX_QUEUED_TOTAL", 10_000, {
+      maxQueuedTotal: readInteger(env, "MAX_QUEUED_TOTAL", 32_768, {
         min: 1,
         max: 1_000_000,
       }),

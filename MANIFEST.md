@@ -45,6 +45,14 @@ alone do not make multiple server instances or external SQL writers safe.
 
 ## Command pipelines
 
+The large-operation extension stages bounded encrypted frames on one connection
+without mutating storage. Commit holds all affected resource keys, validates the
+complete operation and calls the atomic storage batch once. Upload expiration
+and disconnect release uncommitted staging; accepted commits keep their
+reservations until completion. Large reads pin one bounded ciphertext version.
+Large Changed notifications are reassembled before client publication. These
+mechanisms introduce no master/content metadata or persisted operation IDs.
+
 Every command requires its body and a Socket.IO ACK callback. Incoming packets
 and copies must obtain admission capacity before allocating protected resources.
 

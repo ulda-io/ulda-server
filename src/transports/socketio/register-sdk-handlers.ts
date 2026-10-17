@@ -10,6 +10,7 @@ import {
   checkSdkSize, sdkResource, sdkError, SDK_LIMITS, SdkLimitError,
 } from "../../protocol/sdk-commands.js";
 import { publishSdkChanges } from "./sdk-publisher.js";
+import { TransferSession } from './transfer-session.js';
 
 export function registerSdkHandlers(options: {
   io: Server; service: SdkResourceService; router: RequestRouter; config: AppConfig; logger: Logger; admission: ServerAdmission;
@@ -18,7 +19,8 @@ export function registerSdkHandlers(options: {
   let totalReservations = 0;
   io.on("connection", socket => {
     admission.handshakes.get(socket.handshake.auth)?.bindAbort(() => socket.conn.close(true));
-    const actions = new Set(["hello", "read", "create", "update", "delete", "session.close"]);
+    const actions = new Set(["hello", "read", "create", "update", "delete", "session.close", "transfer"]);
+    socket.data.uldaTransfer = socket.handshake.auth?.uldaTransfer === 1;
     socket.use((event, next) => {
       const lease = admission.packets.get(event); admission.packets.delete(event);
       if (!lease) return; // Already discarded by decoder/connection close.
@@ -42,7 +44,7 @@ export function registerSdkHandlers(options: {
     socket.on("error", () => socket.conn.close(true));
     let ended = false;
     let reservations = 0;
-    const finishSession = () => { ended = true; router.unsubscribeSocket(socket.id); };
+    const finishSession = () => { ended = true; transfers.close(); router.unsubscribeSocket(socket.id); };
     socket.on("disconnect", finishSession);
     const active = () => socket.connected && !ended;
 
@@ -61,8 +63,11 @@ export function registerSdkHandlers(options: {
     const subscribe = (ids: readonly bigint[]) => {
       if (active()) for (const id of ids) router.subscribe(socket.id, id);
     };
+    const transfers = new TransferSession(socket, service, router, admission, config, reserve, subscribe,
+      changes => publishSdkChanges(io, router, socket.id, changes,
+        () => { logger.warn("Changed delivery failed after commit", { event: "ulda:changed" }); }), active);
 
-    for (const action of ["hello", "read", "create", "update", "delete", "session.close"]) {
+    for (const action of ["hello", "read", "create", "update", "delete", "session.close", "transfer"]) {
       socket.on("ulda:" + action, (...args: unknown[]) => {
         const ack = args.at(-1);
         // Never perform a mutation without a reply channel.
@@ -80,6 +85,10 @@ export function registerSdkHandlers(options: {
         const handle = async () => {
           if (args.length !== 2 || ended) throw new DomainError("invalid_request", "Invalid session or arguments.");
           const body = args[0];
+          if (action === 'transfer') {
+            await transfers.handle(body, reply, () => { mutationStarted = true; });
+            return;
+          }
           if (action === "session.close") {
             parseSdkEmpty(body);
             finishSession();

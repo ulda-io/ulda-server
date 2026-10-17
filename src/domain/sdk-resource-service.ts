@@ -10,15 +10,15 @@ export class SdkResourceService {
     readonly proof: ProofVerifier,
   ) {}
 
-  async read(ids: readonly bigint[]): Promise<ActiveResource[]> {
+  async read(ids: readonly bigint[], maxPayloadBytes: number = SDK_LIMITS.payloadBytes): Promise<ActiveResource[]> {
     const found = await this.storage.findManyByIds(ids, {
-      maxWitnessBytes: SDK_LIMITS.witnessBytes, maxPayloadBytes: SDK_LIMITS.payloadBytes,
+      maxWitnessBytes: SDK_LIMITS.witnessBytes, maxPayloadBytes,
     });
     if (found.length !== ids.length) throw new Error("Invalid storage batch.");
     return found.map((resource, index) => {
       if (resource === null) throw new DomainError("not_found", "Resource was not found.");
       if (resource === undefined || resource.id !== ids[index]) throw new Error("Misaligned storage batch.");
-      if (resource.witness.byteLength > SDK_LIMITS.witnessBytes || resource.payload.byteLength > SDK_LIMITS.payloadBytes) throw new SdkLimitError();
+      if (resource.witness.byteLength > SDK_LIMITS.witnessBytes || resource.payload.byteLength > maxPayloadBytes) throw new SdkLimitError();
       return resource;
     });
   }
@@ -33,8 +33,8 @@ export class SdkResourceService {
   }
 
   // Caller holds all resource locks until commit, subscription, publication and ACK.
-  async validate(changes: readonly StoredChange[]): Promise<void> {
-    const current = await this.read(changes.map(change => change.id));
+  async validate(changes: readonly StoredChange[], maxPayloadBytes: number = SDK_LIMITS.payloadBytes): Promise<void> {
+    const current = await this.read(changes.map(change => change.id), maxPayloadBytes);
     for (let index = 0; index < changes.length; index++) {
       const change = changes[index]!;
       const previous = current[index]!;

@@ -116,6 +116,7 @@ function testConfig(): AppConfig {
       maxConnections: 1000, maxSubscriptionsTotal: 100000, maxInflightBytes: 67108864, maxActiveReadBytes: 268435456,
       maxBufferedTotalBytes: 67108864, maxPendingCommandsPerSocket: 64,
       maxCommandsPerSecond: 1000, commandBurst: 2000, binaryPacketTimeoutMs: 30000,
+      maxResourceBytes: 67108864, maxTransferBytes: 134217728, maxStagedBytes: 268435456, transferTimeoutMs: 60000,
     },
     readiness: { timeoutMs: 2000, cacheMs: 1000, maxWaiters: 32 },
     gracefulShutdownTimeoutMs: 1000,

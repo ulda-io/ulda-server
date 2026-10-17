@@ -97,6 +97,12 @@ The SDK runs on the client and is not a server runtime dependency.
 
 ## Behavior
 
+Large-catalog clients can read bounded ID batches and upload large encrypted
+operations in parts before one atomic commit. The server never stores a master
+or content role. The [transfer extension](docs/SDK_PROTOCOL.md#large-operation-extension)
+requires a capable SDK; the published 1.0.1 SDK retains its original limits.
+Per-frame limits and configurable byte/subscription/queue budgets still apply.
+
 - Create, Read and Update subscribe the live connection before its success ACK.
 - Each Create or Update batch, and each mixed Delete/Update batch, is one atomic
   database transaction. Separate commands are separate transactions.

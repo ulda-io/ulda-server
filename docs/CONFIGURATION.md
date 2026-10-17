@@ -127,11 +127,11 @@ are listed in [admission limits](ADMISSION_LIMITS.md#settings).
 Invalid unsigned-decimal values fail startup. No automatic retries are introduced
 by raising a budget.
 
-The supplied Compose file interpolates the newer connection/input/read/output,
-rate/pending/assembly budgets. It does not forward `MAX_WITNESS_BYTES`,
-`MAX_SOCKET_MESSAGE_BYTES`, `MAX_QUEUED_TOTAL`, `MAX_QUEUED_PER_RESOURCE` or
-`MAX_SUBSCRIPTIONS_PER_SOCKET` from `.env`. Add those to the server service's
-`environment` in a Compose override to change them. Likewise, standalone bind,
+Both supplied Compose recipes interpolate connection/input/read/output,
+rate/pending/assembly, staging, subscription and Router budgets. They do not
+forward `MAX_WITNESS_BYTES` or `MAX_SOCKET_MESSAGE_BYTES` from `.env`. Add those
+to the server service's `environment` in a Compose override to change them.
+Likewise, standalone bind,
 profile, pool and log settings are not automatically forwarded unless explicitly
 interpolated in compose.yaml. A line in `.env` alone does not set a container
 environment variable.

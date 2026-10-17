@@ -2,6 +2,13 @@
 
 ## 1.0.0
 
+- Large encrypted resource transfers, bounded read fragments and staged mutation
+  uploads with one atomic commit; compatible ordinary SDK CRUD remains unchanged.
+- Fragmented Changed delivery for capable clients; legacy recipients are closed
+  when a committed notification exceeds their supported framing.
+- Configurable staging/resource/deadline budgets and default per-socket
+  subscriptions/total Router capacity of 32768 for larger client catalogs.
+
 - Application-only Docker Hub releases, with separately maintained databases
   and proxies; test-fixture CVE reports are advisory and remain visible.
 - External-PostgreSQL Compose recipe and required published-SDK smoke before

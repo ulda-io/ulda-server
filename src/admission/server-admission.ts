@@ -50,6 +50,7 @@ export class ServerAdmission {
   readonly input: ByteBudget;
   readonly reads: ByteBudget;
   readonly output: ByteBudget;
+  readonly staging: ByteBudget;
   readonly outputPackets = new ByteBudget(65_536);
   readonly connections: ConnectionLimit;
   readonly packets = new WeakMap<object, IngressLease>();
@@ -62,6 +63,7 @@ export class ServerAdmission {
     this.input = new ByteBudget(limits.maxInflightBytes);
     this.reads = new ByteBudget(limits.maxActiveReadBytes);
     this.output = new ByteBudget(limits.maxBufferedTotalBytes);
+    this.staging = new ByteBudget(limits.maxStagedBytes);
     this.connections = new ConnectionLimit(limits.maxConnections);
   }
   claim(body: object): IngressLease | undefined {
@@ -73,6 +75,6 @@ export class ServerAdmission {
       inputBytes: this.input.used, inputPeakBytes: this.input.peak,
       readBytes: this.reads.used, readPeakBytes: this.reads.peak,
       outputBytes: this.output.used, outputPeakBytes: this.output.peak,
-      outputPackets: this.outputPackets.used };
+      outputPackets: this.outputPackets.used, stagedBytes: this.staging.used, stagedPeakBytes: this.staging.peak };
   }
 }

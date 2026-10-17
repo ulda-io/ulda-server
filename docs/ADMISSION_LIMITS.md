@@ -29,9 +29,13 @@ MiB means 1048576 bytes.
 | COMMAND_BURST | 2000 | Token-bucket capacity |
 | BINARY_PACKET_TIMEOUT_MS | 30000 | Absolute binary assembly deadline after its header |
 | MAX_SUBSCRIPTIONS_TOTAL | 100000 | All socket–ID edges plus reserved slots |
-| MAX_SUBSCRIPTIONS_PER_SOCKET | 10000 | One socket's edges plus reserved slots |
-| MAX_QUEUED_TOTAL | 10000 | Total Router key reservations; a batch occupies multiple keys |
+| MAX_SUBSCRIPTIONS_PER_SOCKET | 32768 | One socket's edges plus reserved slots |
+| MAX_QUEUED_TOTAL | 32768 | Total Router key reservations; a batch occupies multiple keys |
 | MAX_QUEUED_PER_RESOURCE | 100 | Running/waiting reservations for one key |
+| MAX_RESOURCE_BYTES | 67108864 | Reassembled ciphertext per extended resource; 1100000–67108864 |
+| MAX_TRANSFER_BYTES | 134217728 | Logical operation bytes, including 256 per entry; 1024–134217728 |
+| MAX_STAGED_BYTES | 268435456 | Shared staged-write accounting; 1024–4294967296 |
+| TRANSFER_TIMEOUT_MS | 60000 | Absolute lifetime of an uncommitted upload or pinned read; 100–300000 ms |
 
 Fixed outbound packet ceilings are 4096 per socket and 65536 overall.
 Engine.IO handshake and Socket.IO CONNECT waits are bounded at 10 seconds.
@@ -104,7 +108,33 @@ reserved slots. Create/Read/Update subscribe before ACK; mixed Delete subscribes
 updated IDs. Session end removes both indexes and cannot be undone by late work.
 Deletion removes the ID's edges from the registry. No resource rooms are created.
 
-## Output ownership
+## Extended transfer ownership
+
+An upload begins with a reservation of `count × 256` bytes. Before retaining
+binary data, it reserves three times the logical witness/payload bytes in the
+shared staging budget. Each Socket.IO frame also retains its ordinary input
+lease until its handler finishes. A connection holds at most one upload.
+Malformed staged data, Cancel, expiry and disconnect release the uncommitted
+reservation. An accepted Commit detaches it from connection cleanup and keeps
+it until validation/storage/publication completes, including failure paths.
+
+The upload does not hold database locks or an SQL transaction. Commit obtains
+all Router keys and validates current rows in groups of at most 64 before one
+atomic storage call. The count must fit `MAX_QUEUED_TOTAL`; concurrent work can
+still make admission fail. These are server budgets, not a catalog schema quota.
+
+A large singleton read pins one ciphertext version and reserves
+`3 × (MAX_RESOURCE_BYTES + 167)` bytes until the last fragment, expiry or close.
+Validation of an oversized current row uses the same conservative reservation.
+At the defaults, one such reservation is about 192 MiB; concurrent large reads
+can receive `too_large` under the 256 MiB read budget. A small configured read
+budget can reject an otherwise small resource on this path. No partial snapshot
+is exposed to the SDK. Ordinary reads retain their existing accounting.
+
+The shared staging snapshot exposes `stagedBytes` and `stagedPeakBytes`.
+These reservations are accounting units, not an exact process-memory ceiling.
+
+## Output buffering
 
 ACKs, Changed, binary attachments and control packets reserve their length plus
 64 bytes per frame. Accounting spans the Engine.IO write buffer and the period

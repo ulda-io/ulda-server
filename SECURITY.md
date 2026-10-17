@@ -94,6 +94,14 @@ partition can leave clients uncertain. [Operational policy](docs/OPERATIONS.md).
 
 ## Resource and transport controls
 
+Extended operations retain ciphertext and public witnesses under shared staging
+budgets and absolute deadlines. No upload part mutates storage; Commit validates
+the complete operation against current witnesses before one atomic batch.
+Connection cleanup cannot release an accepted commit's capacity prematurely.
+Large read snapshots and fragmented notifications retain the existing trust and
+unknown-outcome boundaries. Limits bound accounted work, not exact process RSS;
+operators must size memory, outbound buffers and timeouts for large catalogs.
+
 The SDK endpoint bounds packet headers, binary attachments, batch sizes,
 connection slots, pending/rate-limited commands, input/copy bytes, active reads,
 subscription edges and outbound bytes/packets. See
