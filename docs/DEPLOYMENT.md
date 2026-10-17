@@ -276,6 +276,14 @@ failed runs retain them under ignored .local for local inspection. Synthetic
 credentials are not production credentials. The drill does not replace
 final load, real certificate renewal, browser or independent security review.
 
+On POSIX hosts, the drill keeps its generated secret directory owner-only (0700)
+and permits reads of the individual synthetic files (0644) so bind-mounted
+secrets are readable by the container's UID 1000 even when the runner uses a
+different UID. It verifies that access before role setup without printing values.
+This adjustment applies only to disposable test credentials. The operator-facing
+generator still writes 0600 files; production access needs the narrowly scoped
+ownership/ACL setup described above.
+
 The runner builds task-specific PostgreSQL/Nginx tags unless explicit
 `ULDA_TEST_POSTGRES_IMAGE` and `ULDA_TEST_PROXY_IMAGE` references are supplied.
 All three image IDs are saved in the result. Optionally set

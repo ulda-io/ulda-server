@@ -74,15 +74,32 @@ registry. Nginx is tested before publication and is not published.
 2. Require `Required release gate` and review of workflow, Dockerfile and release
    changes. Protect version tags from unauthorized creation or movement. Verify
    protection with a failing test before enabling publication.
-3. Create **one public Docker Hub repository** for ULDA Server in the intended
-   organization. Choose the name explicitly; enable immutable versions where
-   available. Database and proxy repositories are not needed.
+3. Create **one public Docker Hub repository** for ULDA Server under the chosen
+   Docker ID or organization namespace. A Docker Personal account supports public
+   repositories without an organization subscription. Choose the name explicitly;
+   enable immutable versions where available. Database/proxy repositories and
+   Docker Hub Automated Builds are not needed; GitHub Actions performs the build.
 4. Create the GitHub environment **`dockerhub`**, require a release reviewer and
    restrict deployments to version tags. Verify environment protections are
    supported by the selected GitHub plan and disable bypass where available.
-5. Use a Docker Hub token with minimum write access to this server repository,
-   without delete/admin privileges. Store it only as the environment secret
-   `DOCKERHUB_TOKEN`. Never commit it or include it in logs/issues.
+5. For a personal account, create a PAT with **Repo Read & Write**, without Delete
+   or Cloud Sandboxes access. A PAT covers repositories accessible to its account;
+   it cannot be restricted to just this repository. Store it only as the
+   environment secret `DOCKERHUB_TOKEN`. Never commit it or include it in logs/issues.
+   Organizations can use a repository-scoped organization token where supported.
+
+On GitHub Free for organizations, a private repository can run CI but cannot
+provide this environment approval setup. Required environment reviewers on Free,
+Pro and Team are available for public repositories; private approval requires a
+supporting Enterprise plan. Keep publication disabled while staging privately.
+For the free release path, explicitly make the reviewed repository public, then
+configure and verify branch/tag protection and the `dockerhub` environment before
+adding registry write credentials or enabling publication. Do not replace this
+approval boundary with an unprotected repository secret.
+
+References: [Docker repository creation](https://docs.docker.com/docker-hub/repos/create/),
+[PAT permissions](https://docs.docker.com/security/access-tokens/reference/),
+[GitHub environment availability](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments).
 
 Repository variables:
 
@@ -96,7 +113,7 @@ Repository variables:
 | Variable | Value |
 | --- | --- |
 | `DOCKERHUB_USERNAME` | Account associated with the token |
-| `ULDA_DOCKER_SERVER` | Docker Hub `organization/server-repository` |
+| `ULDA_DOCKER_SERVER` | Docker Hub `namespace/server-repository` (personal or organization) |
 
 `ULDA_DOCKER_POSTGRES` and `ULDA_DOCKER_PROXY` are unused and can be removed from
 an older configuration. Registry verification expects anonymous read access to

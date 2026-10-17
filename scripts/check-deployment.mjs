@@ -100,12 +100,27 @@ async function main(){
   results.previousPostgresImageId=await docker("image","inspect",previous,"--format","{{.Id}}");
  }
  await run(process.execPath,["scripts/create-local-secrets.mjs"]);
+ // Only these disposable test secrets: keep their host directory private, but
+ // allow UID 1000 to read each individually mounted file on native Linux hosts.
+ // The production generator still creates owner-only (0600) credentials.
+ if(process.platform!=="win32"){
+  assert.equal(fs.statSync(env.ULDA_SECRETS_DIR).mode&0o777,0o700);
+  for(const name of ["postgres_admin_password","postgres_migration_password","postgres_runtime_password"]){
+   const file=path.join(env.ULDA_SECRETS_DIR,name);
+   assert.ok(fs.lstatSync(file).isFile()&&!fs.lstatSync(file).isSymbolicLink());
+   fs.chmodSync(file,0o644);
+  }
+ }
  await docker("run","--rm","--mount","type=bind,source="+certs+",target=/out","--entrypoint","sh",results.auxiliaryImages.postgres.id,"-c","openssl req -x509 -newkey rsa:2048 -nodes -days 1 -keyout /out/key.pem -out /out/cert.pem -subj /CN=localhost -addext subjectAltName=DNS:localhost,IP:127.0.0.1 && chmod 644 /out/key.pem /out/cert.pem");
  phase="build";if(!requestedImage)await docker("build","-t",image,".");results.imageId=await docker("image","inspect",image,"--format","{{.Id}}");
  image=results.imageId;env.ULDA_SERVER_IMAGE=image;
  env.ULDA_TEST_IMAGE=image;
  await run(process.execPath,["--test","test/container/image.test.mjs","test/container/context.test.mjs"]);
  pass("local image artifact and container checks");
+ phase="fixture-secret-mounts";
+ await dc(source,"run","--rm","--no-deps","--entrypoint","node","db-setup","--input-type=module","-e",
+  "import assert from 'node:assert/strict';import fs from 'node:fs';assert.equal(process.getuid(),1000);for(const name of ['db_admin_password','db_migration_password','db_runtime_password'])fs.accessSync('/run/secrets/'+name,fs.constants.R_OK)");
+ pass("non-root setup can read isolated test secret mounts without exposing their contents");
  if(previous)env.ULDA_POSTGRES_IMAGE=results.previousPostgresImageId;
  phase="new-volume";await startDb(source);
  const collationQuery="SELECT datlocprovider,datcollate,datctype,datcollversion,pg_database_collation_actual_version(oid) FROM pg_database WHERE datname=current_database()";
