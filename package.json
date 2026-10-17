@@ -26,7 +26,8 @@
     "test:capacity": "node scripts/check-capacity.mjs",
     "test:ci": "node --test test/ci/*.test.mjs",
     "audit:source": "node scripts/ci/audit-source.mjs",
-    "test:large-catalog": "node scripts/check-large-catalog.mjs"
+    "test:large-catalog": "node scripts/check-large-catalog.mjs",
+    "ci:sdk-candidate": "node scripts/ci/sdk-candidate.mjs"
   },
   "dependencies": {
     "pg": "8.22.0",

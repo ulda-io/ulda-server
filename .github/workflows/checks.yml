@@ -93,7 +93,7 @@ jobs:
           path: .local/sdk-source
           persist-credentials: false
       - name: Build candidate and verify reviewed npm archive digest
-        run: node scripts/ci/sdk-candidate.mjs
+        run: npm run ci:sdk-candidate
       - name: Build application and separate Linux amd64 test fixtures
         run: node scripts/ci/images.mjs build
       - name: Published SDK, real PostgreSQL and container checks
