@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { performance, monitorEventLoopDelay } from "node:perf_hooks";
 import { Ulda, SocketIoTransport } from "./sdk.mjs";
-import { Histogram } from "./metrics.mjs";
+import { Histogram, loadFailureCode } from "./metrics.mjs";
 
 assert(process.send, "Run via npm run test:capacity");
 const clients = [], latency = new Histogram(), ack = new Histogram();
@@ -21,7 +21,11 @@ assert.equal(target.hostname, "127.0.0.1"); assert.equal(target.protocol, "http:
 assert(Number.isInteger(init.clients) && init.clients > 0 && init.clients <= 100);
 const text = "x".repeat(1000), password = "synthetic-capacity-" + randomUUID();
 const eventLoop = monitorEventLoopDelay({resolution:20});
-let exitCode = 0;
+let exitCode = 0, phase = 'clients';
+const abort = (error, origin) => {
+  stop = true;
+  send({ kind: 'abort', phase: origin, code: loadFailureCode(error), attempted, confirmed, failed, asyncErrors });
+};
 try {
   for (let i = 0; i < init.clients; i++) {
     const transport = new SocketIoTransport(init.url, { allowInsecureLocalhost:true, timeout:10_000 });
@@ -32,12 +36,13 @@ try {
       if (event.phase === "ack" && event.event === "ulda:update" && Number.isFinite(event.durationMs)) ack.add(event.durationMs);
       if (event.phase === "push") pushes++;
     });
-    ulda.on("error", () => { if (active) { asyncErrors++; stop=true; send({kind:"abort"}); } });
+    ulda.on("error", error => { if (active) { asyncErrors++; abort(error, 'async'); } });
     await ulda.register(password);
     await ulda.add("item", {seq:0,text}, "X");
   }
   send({kind:"ready",clients:clients.length});
   const command = await onceMessage("start");
+  phase = 'warmup';
   const warmEnd = performance.now() + command.warmup * 1000;
   await Promise.all(clients.map(async c => {
     while (!stop && performance.now() < warmEnd) await c.ulda.update("item", {seq:++c.seq,text});
@@ -48,6 +53,7 @@ try {
   await new Promise(resolve => setTimeout(resolve, Math.max(0, measure.startAt - Date.now())));
   const deadline = performance.now() + measure.seconds * 1000;
   measurementStart = performance.now(); lastCompletion = measurementStart;
+  phase = 'measurement';
   const cpuStart = process.cpuUsage(); eventLoop.enable(); active=true;
   const progress = setInterval(() => send({kind:"progress",attempted,confirmed,failed,rss:process.memoryUsage().rss}),5000);
   try {
@@ -55,7 +61,7 @@ try {
       while (!stop && performance.now() < deadline) {
         attempted++; const start=performance.now();
         try { await c.ulda.update("item",{seq:++c.seq,text}); confirmed++; }
-        catch { failed++; stop=true; send({kind:"abort"}); }
+        catch (error) { failed++; abort(error, 'update'); }
         const end=performance.now(); lastCompletion=Math.max(lastCompletion,end);
         if(end>deadline)afterDeadline++;
         latency.add(end-start);
@@ -65,13 +71,14 @@ try {
   const cpu=process.cpuUsage(cpuStart), durationMs=lastCompletion-measurementStart;
   if (stop || failed || asyncErrors) throw new Error("Measurement failed");
   // Verify remote state using the same 100 connections, outside the timed window.
+  phase = 'verification';
   for (const c of clients) { await c.ulda.refresh(); assert.equal(c.ulda.value("item").seq,c.seq); }
   const report={kind:"result",attempted,confirmed,failed,asyncErrors,pushes,afterDeadline,durationMs,
     latency:latency.export(),ack:ack.export(),cpuMicros:cpu.user+cpu.system,
     eventLoopP99Ms:eventLoop.percentile(99)/1e6,maxRss:process.resourceUsage().maxRSS*1024,
     finalVerified:clients.length,jsonBytes:Buffer.byteLength(JSON.stringify({seq:clients[0].seq,text}))};
   send(report);
-} catch { exitCode=1; send({kind:"failed",attempted,confirmed,failed,asyncErrors}); }
+} catch (error) { exitCode=1; send({kind:"failed",phase,code:loadFailureCode(error),attempted,confirmed,failed,asyncErrors}); }
 finally {
   // No write replay or superDelete after an ambiguous outcome; parent owns the DB.
   await Promise.allSettled(clients.map(c=>c.ulda.close()));

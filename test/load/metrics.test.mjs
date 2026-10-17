@@ -1,8 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { Histogram, loadOptions } from "./metrics.mjs";
+import { Histogram, loadOptions, loadFailureCode } from "./metrics.mjs";
 // Keep candidate loading covered by the existing capacity-tool CI entry.
 import './sdk.test.mjs';
+
+test('capacity failures expose only fixed codes, never private diagnostics', () => {
+  const secret = 'synthetic-private-error-detail';
+  assert.equal(loadFailureCode({ code: 'UNKNOWN_OUTCOME', message: secret, stack: secret }), 'UNKNOWN_OUTCOME');
+  assert.equal(loadFailureCode({ code: secret }), 'CHECK_FAILED');
+  assert.equal(loadFailureCode(new Error(secret)), 'CHECK_FAILED');
+  assert.equal(loadFailureCode({ get code() { throw new Error(secret); } }), 'CHECK_FAILED');
+  assert.equal(loadFailureCode(null), 'CHECK_FAILED');
+});
 
 test("merged capacity histograms preserve every sample and expose overflow", () => {
   const a = new Histogram(), b = new Histogram();

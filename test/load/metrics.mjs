@@ -1,4 +1,14 @@
 // Bounded histograms: one-millisecond buckets, including an explicit overflow.
+const safeCodes = new Set(['INVALID_INPUT', 'INVALID_PACKET', 'UNSUPPORTED_PROFILE',
+  'CRYPTO_FAILED', 'CLOSED', 'OFFLINE', 'NOT_OPEN', 'UNKNOWN_OUTCOME', 'CONFLICT',
+  'NOT_FOUND', 'EXISTS', 'NEEDS_RESYNC', 'ROLLBACK', 'LIMIT', 'UNSUPPORTED',
+  'SERVER_ERROR', 'STALE_REFERENCE', 'BUSY', 'TIMEOUT', 'ERR_ASSERTION']);
+export function loadFailureCode(error) {
+  // No messages, stacks, arbitrary code strings or error serialization.
+  try { return typeof error?.code === 'string' && safeCodes.has(error.code) ? error.code : 'CHECK_FAILED'; }
+  catch { return 'CHECK_FAILED'; }
+}
+
 export class Histogram {
   bins = new Uint32Array(60_001);
   count = 0;

@@ -104,7 +104,10 @@ async function main(){
       if(m.kind==="warmed")child.warmed=true;
       if(m.kind==="progress")child.progress=m;
       if(m.kind==="result")child.report=m;
-      if(m.kind==="abort"||m.kind==="failed"){child.failed=true;for(const c of children)if(c.proc.connected)c.proc.send({action:"stop"});}
+      if(m.kind==="abort"||m.kind==="failed"){
+        child.failure ??= m; // Worker sends only fixed safe codes and counters.
+        child.failed=true;for(const c of children)if(c.proc.connected)c.proc.send({action:"stop"});
+      }
     });
     proc.on("error",()=>{child.failed=true;});
     proc.on("exit",code=>{child.exited=true;if(code!==0||!child.report)child.failed=true;});
@@ -146,7 +149,11 @@ async function main(){
   result.status="PASS";result.integrity="all final content sequences reread and verified; expected row count; no author echoes";
 }
 try{await main();}
-catch{result.status="FAIL";result.failedPhase=phase;result.partial=children.map(c=>c.progress);process.exitCode=1;console.error("FAIL capacity "+phase+"; private diagnostics suppressed.");}
+catch{
+  result.status="FAIL";result.failedPhase=phase;result.partial=children.map(c=>c.progress);
+  result.workerFailures=children.flatMap((c,worker)=>c.failure?[{worker,...c.failure}]:[]);
+  process.exitCode=1;console.error("FAIL capacity "+phase+"; private diagnostics suppressed.");
+}
 finally{
   clearInterval(statsTimer);await statsTask;
   for(const c of children)if(!c.exited){if(c.proc.connected)c.proc.send({action:"stop"});c.proc.kill();}

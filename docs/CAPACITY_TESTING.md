@@ -72,6 +72,9 @@ the throughput denominator includes final draining time. Warmup, setup and final
 verification do not count as measured updates. Metrics collection errors are visible.
 
 Any failed or uncertain update stops the workload; no mutation is replayed.
+On failure, the report retains the first fixed SDK error code and counters from
+each reporting worker. Arbitrary exception messages, stacks and payloads remain
+suppressed; a failed run is never converted to acceptance by a successful retry.
 After measurement, every client rereads its content and checks its final sequence.
 The database row count and absence of author-echo Changed messages are checked.
 Successful measurement requires no failed writes/asynchronous errors, successful
