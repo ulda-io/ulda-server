@@ -11,6 +11,9 @@ test('capacity failures expose only fixed codes, never private diagnostics', () 
   assert.equal(loadFailureCode(new Error(secret)), 'CHECK_FAILED');
   assert.equal(loadFailureCode({ get code() { throw new Error(secret); } }), 'CHECK_FAILED');
   assert.equal(loadFailureCode(null), 'CHECK_FAILED');
+  let reads = 0;
+  assert.equal(loadFailureCode({ get code() { return ++reads <= 2 ? 'TIMEOUT' : secret; } }), 'TIMEOUT');
+  assert.equal(reads, 1);
 });
 
 test("merged capacity histograms preserve every sample and expose overflow", () => {

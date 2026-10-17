@@ -5,7 +5,10 @@ const safeCodes = new Set(['INVALID_INPUT', 'INVALID_PACKET', 'UNSUPPORTED_PROFI
   'SERVER_ERROR', 'STALE_REFERENCE', 'BUSY', 'TIMEOUT', 'ERR_ASSERTION']);
 export function loadFailureCode(error) {
   // No messages, stacks, arbitrary code strings or error serialization.
-  try { return typeof error?.code === 'string' && safeCodes.has(error.code) ? error.code : 'CHECK_FAILED'; }
+  try {
+    const code = error?.code;
+    return typeof code === 'string' && safeCodes.has(code) ? code : 'CHECK_FAILED';
+  }
   catch { return 'CHECK_FAILED'; }
 }
 
