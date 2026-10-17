@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { names, fixtureNames, buildNames, externalPostgresImage, sha256, validateManifest, evaluateVulnerabilities, validateCapacity, imageContentIdentity } from './policy.mjs';
+import { names, fixtureNames, buildNames, externalPostgresImage, sha256, validateManifest, evaluateVulnerabilities, validateCapacity, validateLargeCatalog, imageContentIdentity } from './policy.mjs';
 
 const root = process.cwd(), output = path.resolve('.local/ci-images');
 const run = (file, args) => execFileSync(file, args, { stdio: 'inherit', windowsHide: true, timeout: 1200000 });
@@ -34,9 +34,9 @@ if (action === 'build') {
       .filter(f => fs.existsSync(f) && fs.statSync(f).mtimeMs >= Date.parse(build.startedAt));
     assert(matches.length > 0, `Missing current ${prefix} report`);
     matches.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
-    return JSON.parse(fs.readFileSync(matches[0]));
+    return { ...JSON.parse(fs.readFileSync(matches[0])), reportSha256: createHash('sha256').update(fs.readFileSync(matches[0])).digest('hex') };
   };
-  const reports = { integration: find('integration-'), deployment: find('deployment-'), capacity: find('ulda-capacity-') };
+  const reports = { integration: find('integration-'), deployment: find('deployment-'), capacity: find('ulda-capacity-'), largeCatalog: find('large-catalog-') };
   for (const report of Object.values(reports)) {
     assert.equal(report.status, 'PASS');
     assert.equal(report.cleanup, 'PASS');
@@ -46,6 +46,10 @@ if (action === 'build') {
   assert.equal(reports.deployment.auxiliaryImages.proxy.id, build.images.proxy.id);
   const long = process.env.ULDA_CI_RELEASE === 'true';
   const measured = validateCapacity(reports.capacity, long ? 1800 : 30);
+  const candidate = JSON.parse(fs.readFileSync('test/consumer-candidate.json'));
+  validateLargeCatalog(reports.largeCatalog, candidate, build.images.server.id);
+  assert.equal(reports.capacity.sdk, `${candidate.name}@${candidate.version}`);
+  assert.equal(reports.capacity.sdkArchiveSha256, candidate.sha256, 'Capacity must use the same candidate archive');
   const externalReceiptFile = '.local/ci-smoke-candidate.json';
   assert(fs.statSync(externalReceiptFile).mtimeMs >= Date.parse(build.startedAt));
   const externalReceipt = JSON.parse(fs.readFileSync(externalReceiptFile));
@@ -54,9 +58,10 @@ if (action === 'build') {
   assert.equal(externalReceipt.commit, commit);
   assert.equal(externalReceipt.images.server.reference, build.images.server.id);
   assert.deepEqual(externalReceipt.externalDatabase, build.externalDatabase);
-  const manifest = { schema: 2, commit, sourceClean: build.sourceClean === true, version: build.version, platform: build.platform,
+  const manifest = { schema: 3, commit, sourceClean: build.sourceClean === true, version: build.version, platform: build.platform,
     releaseAcceptance: long, images: {}, testFixtures: Object.fromEntries(fixtureNames.map(name => [name, build.images[name]])),
-    externalDatabase: build.externalDatabase, checks: ['integration', 'deployment', 'capacity', 'external-postgres'],
+    externalDatabase: build.externalDatabase, checks: ['integration', 'deployment', 'capacity', 'external-postgres', 'large-catalog'],
+    sdkCandidate: candidate, largeCatalog: { count: reports.largeCatalog.count, reportSha256: reports.largeCatalog.reportSha256 },
     capacity: { clients: 100, seconds: reports.capacity.options.seconds, confirmed: measured.confirmed } };
   for (const name of names) {
     const { tag, id } = build.images[name];

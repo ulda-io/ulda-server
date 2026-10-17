@@ -2,6 +2,9 @@
 
 ## 1.0.0
 
+- Required CI acceptance for the reviewed ULDA Auth 1.1.0 archive: 65 public creates, a 10,000-content catalog and staged complete deletion against the application container and PostgreSQL. Capacity uses the same archive; published 1.0.1 compatibility remains covered.
+- Document combined catalog, subscription, Router, staging and outbound budgets.
+
 - Bounded FIFO admission for concurrent reads and mutation validation without
   increasing byte limits; cancellation, shutdown cleanup and distinct temporary
   `not_ready` rejection prevent read-splitting storms under budget contention.

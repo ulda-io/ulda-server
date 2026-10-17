@@ -76,3 +76,7 @@ in this source distribution. The [capacity runner](CAPACITY_TESTING.md) uses a
 disposable stack. A separate fixed-arrival-rate experiment is needed to establish
 an SLA such as 200 updates/s with p95 at most one second; closed-loop saturation
 does not prove it. See the [release procedure](RELEASING.md).
+
+## Large-catalog release regression
+
+The required image job installs a digest-pinned ULDA Auth 1.1.0 candidate archive and runs `npm run test:large-catalog` against the real application container and an isolated PostgreSQL fixture. It retains the published SDK 1.0.1 compatibility suite separately. See [candidate scenarios and reproduction](PUBLISHED_SDK_TESTS.md#large-catalog-candidate-acceptance).

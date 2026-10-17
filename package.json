@@ -25,7 +25,8 @@
     "test:deployment": "node scripts/check-deployment.mjs",
     "test:capacity": "node scripts/check-capacity.mjs",
     "test:ci": "node --test test/ci/*.test.mjs",
-    "audit:source": "node scripts/ci/audit-source.mjs"
+    "audit:source": "node scripts/ci/audit-source.mjs",
+    "test:large-catalog": "node scripts/check-large-catalog.mjs"
   },
   "dependencies": {
     "pg": "8.22.0",

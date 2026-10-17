@@ -214,3 +214,13 @@ A second writer against the same namespace is unsupported.
 Lower budgets can reject otherwise valid requests. Tuning must not weaken
 atomicity, change cryptography or introduce automatic write replay.
 See [deployment](DEPLOYMENT.md) and [testing](TESTING.md).
+
+## Large catalogs and combined budgets
+
+ULDA Auth 1.1.0 removes the fixed 63-content catalog cap. It does not remove server admission limits. On a fresh connection, the default 32,768 subscription ceiling permits at most 32,767 contents plus the master, before other limits. One hundred clients opening 10,000 contents each exceed the global 100,000 subscription budget.
+
+Complete atomic deletion needs Router capacity for every affected ID at commit. Fragmenting the upload does not split that transaction. Staging accounts for three copies of binary bytes plus 256 bytes per item, so an operation below the logical 128 MiB ceiling can still exhaust the 256 MiB staging budget.
+
+Large Changed delivery also uses the outbound queue: a valid resource can exceed the 16 MiB per-connection budget and cause a recipient to disconnect. Reconnect/Read recovers state; Changed has no durable replay log. The SDK eagerly loads all content and re-encrypts the entire master on catalog mutations. Catalog count alone is not a memory or throughput estimate.
+
+Subscriptions use two Maps with per-resource/per-connection arrays. Membership and removal scan the relevant list; the implementation does not scan all clients for each ordinary update. Large fan-out remains proportional to the recipient set. Raising connection or subscription limits requires measurements with the actual payload and fan-out profile.

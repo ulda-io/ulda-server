@@ -82,10 +82,24 @@ jobs:
       - run: npm ci --ignore-scripts --no-fund
       - run: npm ci --prefix test/consumer --ignore-scripts --no-fund
       - run: npm audit --prefix test/consumer --omit=dev --audit-level=high
+      - name: Read reviewed SDK candidate identity
+        id: sdk
+        run: node scripts/ci/sdk-candidate.mjs identity
+      - name: Check out exact SDK candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: ulda-io/ulda-auth
+          ref: ${{ steps.sdk.outputs.commit }}
+          path: .local/sdk-source
+          persist-credentials: false
+      - name: Build candidate and verify reviewed npm archive digest
+        run: node scripts/ci/sdk-candidate.mjs
       - name: Build application and separate Linux amd64 test fixtures
         run: node scripts/ci/images.mjs build
       - name: Published SDK, real PostgreSQL and container checks
         run: npm run test:integration
+      - name: SDK candidate with 65 public creates and a 10000-content catalog
+        run: npm run test:large-catalog
       - name: TLS, privileges, restart and backup restoration
         run: npm run test:deployment
       - name: Application-only Compose with independently operated PostgreSQL

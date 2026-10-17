@@ -39,7 +39,7 @@ export function validateIdentity(pkg, lock, env) {
   return pkg.version;
 }
 export function validateManifest(manifest, commit) {
-  assert.equal(manifest.schema, 2);
+  assert.equal(manifest.schema, 3);
   assert.match(commit, /^[a-f0-9]{40}$/);
   assert.equal(manifest.commit, commit);
   assert.equal(manifest.platform, 'linux/amd64');
@@ -56,7 +56,10 @@ export function validateManifest(manifest, commit) {
   assert.deepEqual(Object.keys(manifest.externalDatabase).sort(), ['contentIdentity', 'reference']);
   assert.equal(manifest.externalDatabase.reference, externalPostgresImage);
   assert.match(manifest.externalDatabase.contentIdentity, /^[a-f0-9]{64}$/);
-  assert.deepEqual([...manifest.checks].sort(), ['capacity', 'deployment', 'external-postgres', 'integration'], 'Missing required acceptance');
+  assert.deepEqual([...manifest.checks].sort(), ['capacity', 'deployment', 'external-postgres', 'integration', 'large-catalog'], 'Missing required acceptance');
+  validateSdkIdentity(manifest.sdkCandidate);
+  assert.equal(manifest.largeCatalog.count, 10000);
+  assert.match(manifest.largeCatalog.reportSha256, /^[a-f0-9]{64}$/);
   for (const name of names) {
     const item = manifest.images[name];
     assert.equal(item.archive, `${name}.tar`);
@@ -102,6 +105,27 @@ export function validateCapacity(result, seconds) {
   assert.equal(m.authorEchoes, 0);
   assert.equal(m.verifiedClients, 100);
   return m;
+}
+export function validateSdkIdentity(value) {
+  assert.equal(value.name, 'ulda-auth');
+  assert.equal(value.version, '1.1.0');
+  assert.match(value.commit, /^[a-f0-9]{40}$/);
+  assert.match(value.sha256, /^[a-f0-9]{64}$/);
+}
+export function validateLargeCatalog(result, expected, imageId) {
+  validateSdkIdentity(expected);
+  assert.equal(result.status, 'PASS');
+  assert.equal(result.cleanup, 'PASS');
+  assert.equal(result.imageId, imageId);
+  assert.deepEqual(result.sdk, expected);
+  assert.match(result.consumerLockSha256, /^[a-f0-9]{64}$/);
+  assert.equal(result.count, 10000);
+  assert(result.catalogBytes > 1100000, 'Catalog must exercise fragmented resource transfer');
+  assert.equal(result.remainingRows, 0);
+  assert.equal(result.asyncErrors, 0);
+  assert(!result.databaseError);
+  assert.deepEqual(result.checks, ['container-start', 'public-create-65', 'seed-10000', 'connect-10000',
+    'peer-connect-10000', 'add-and-changed', 'update-and-changed', 'refresh-10001', 'delete-and-changed', 'super-delete-and-changed']);
 }
 export function repositoryName(value) {
   assert(typeof value === 'string' && /^[a-z0-9]+(?:[._-][a-z0-9]+)*\/[a-z0-9]+(?:[._-][a-z0-9]+)*$/.test(value), 'Set an explicit Docker Hub namespace/repository');

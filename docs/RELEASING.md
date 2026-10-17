@@ -16,7 +16,7 @@ those database/proxy images for production.
 `Server CI` runs on branch pushes and pull requests. It checks the publication
 tree, complete fetched Git history with Gitleaks, workflow syntax with actionlint,
 Node 22/24 on Linux/Windows, production npm advisories, and Linux container tests
-using the published SDK. Test credentials belong to disposable databases. No
+using the published compatibility SDK and the pinned 1.1.0 candidate archive. Test credentials belong to disposable databases. No
 registry write credentials are available to these jobs.
 
 The image job builds the application and local test fixtures once. Required
@@ -30,12 +30,27 @@ minutes with 100 connections and no target update rate. This is correctness and
 capacity acceptance on the runner, not a universal throughput claim. Database
 outages, transaction failures or SDK incompatibility still fail required checks.
 
-Export produces only `server.tar` and a schema-2 `manifest.json`. The manifest
+The candidate identity in `test/consumer-candidate.json` pins the SDK source commit,
+version and reviewed npm archive SHA-256. CI checks out that public commit, builds
+with its lockfile, verifies the archive hash, then installs it into a clean test
+consumer. The required large-catalog test covers 65 public content creations and
+a seeded 10,000-content catalog, including two clients, fragmented ciphertext,
+Changed, Refresh, deletion and complete staged deletion. Seeding is not a benchmark
+of 10,000 sequential `add()` calls. Both short and release capacity tests use this
+same archive. The published 1.0.1 consumer remains a separate compatibility check.
+See [SDK integration](PUBLISHED_SDK_TESTS.md).
+
+The pinned SDK commit must be reachable in `ulda-io/ulda-auth` before server CI can
+run. After npm publication, update the published consumer and its lockfile in a
+separate reviewed change; do not silently install an unpinned `latest` version.
+
+Export produces only `server.tar` and a schema-3 `manifest.json`. The manifest
 binds the source commit, application archive checksum, image config/rootfs
 identity and current acceptance receipts. Fixture identities are recorded as
 test context, without database/proxy publication archives. It also records the
 immutable upstream database reference and its content identity for the smoke.
-Old three-image manifests and extra release images are rejected.
+It also binds the candidate SDK identity and large-catalog receipt digest. Old
+manifests missing this acceptance and extra release images are rejected.
 
 The required security job verifies the application archive and scans that same
 artifact with pinned Trivy, retaining all severities and unfixed CVEs. It creates

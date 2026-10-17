@@ -1,4 +1,4 @@
-# Integration with the published SDK
+# Integration with published and candidate SDKs
 
 The current integration entrypoint is `npm run test:integration`. It works from
 this repository alone and requires Node.js 22+, npm and a running Docker engine.
@@ -83,3 +83,22 @@ for real credentials or private application state.
 The process-exit helper is explicitly test-only. This suite does not measure
 sustained throughput or browser behavior. Backup/restore has a separate deployment
 drill. See [Testing](TESTING.md) for commands and the limits of each suite.
+
+## Large-catalog candidate acceptance
+
+Run `npm run test:large-catalog` with an explicit `ULDA_TEST_IMAGE` and `ULDA_TEST_SDK_TARBALL`. The archive must match the version and SHA-256 in `test/consumer-candidate.json`; there is no fallback to the old published SDK. `ULDA_TEST_POSTGRES_IMAGE` optionally selects an existing local database fixture. Otherwise the runner builds the repository fixture.
+
+The runner installs the archive with lifecycle scripts disabled into a fresh ignored consumer. It uses labelled disposable Docker resources, loopback-only ports and random database credentials. The application runs in the actual container. All lifecycle calls use the installed public SDK export. Fixture generation alone uses private crypto helpers from that installed archive to seed 10,000 separately encrypted contents efficiently. It does not import another local source checkout.
+
+Required scenarios:
+
+- Create 65 contents using public `register`/`add`, open them from a second client and delete them.
+- Open a 10,000-content catalog from two clients. Its encrypted master must exceed the ordinary 1,100,000-byte payload bound.
+- Add content, update content and receive the peer's Changed notifications.
+- Explicitly refresh 10,001 contents; delete one content together with its catalog link.
+- Stage and commit complete deletion, observe the peer closing and verify zero rows remain.
+- Reject asynchronous errors, detect selected test secrets in server logs and verify cleanup.
+
+The timeout is explicitly 60 seconds per SDK await for this correctness test. It does not prove the default 10-second timeout suits all catalog sizes or hardware. Summaries under `.local/large-catalog-*` contain counts, timings and artifact identities, never passwords, origins, plaintext bodies or raw exception diagnostics. Admission and transaction fault cases remain covered by the server's unit and PostgreSQL suites.
+
+CI builds the candidate from a pinned public commit and requires its reviewed archive digest. The image export gate checks the fresh large-catalog receipt, the application/database image IDs, all required phases and successful cleanup. Capacity acceptance must use that same SDK archive. A green old-SDK compatibility test alone cannot authorize export.
