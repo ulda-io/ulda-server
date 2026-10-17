@@ -77,9 +77,9 @@ if (action === 'build') {
     assert.equal(await sha256(archive), item.sha256, 'Image archive checksum mismatch');
     const report = `.local/ci-reports/${name}.json`;
     run(scanner, ['image', '--input', archive, '--scanners', 'vuln', '--list-all-pkgs', '--format', 'json', '--output', report, '--timeout', '10m', '--ignorefile', '.github/empty.trivyignore']);
-    results[name] = evaluateVulnerabilities(JSON.parse(fs.readFileSync(report)), [item.id, item.configId]);
+    results[name] = evaluateVulnerabilities(JSON.parse(fs.readFileSync(report)), [item.id, item.configId], { imageName: name });
     run(scanner, ['image', '--input', archive, '--format', 'cyclonedx', '--output', `.local/ci-reports/${name}.cdx.json`, '--timeout', '10m']);
-    console.log(`${name}: ${JSON.stringify(results[name].counts)}; blocking findings ${results[name].blocked.length}`);
+    console.log(`${name}: ${JSON.stringify(results[name].counts)}; blocking findings ${results[name].blocked.length}; vendor-confirmed non-affected ${results[name].notAffected.length}`);
   }
   fs.writeFileSync('.local/ci-reports/gate.json', JSON.stringify({ commit, results }, null, 2) + '\n');
   assert(Object.values(results).every(r => r.passed), 'Image security gate blocked; review reports. Unfixed findings are included.');

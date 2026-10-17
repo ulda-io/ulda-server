@@ -17,3 +17,8 @@ OS package upgrades are applied. PostgreSQL JIT/LLVM, GnuPG installation
 tools, the less pager and their unused dependencies are removed. Setuid and
 setgid permission bits are removed from system executables. Package metadata,
 the official database initialization scripts, backup tools and locales remain.
+
+The inherited `ssl-cert-snakeoil` certificate and private key are removed from
+the final filesystem. They remain recoverable from the public upstream image's
+lower layers and must never be used as a deployment identity. GnuTLS's embedded
+public self-test vectors remain unmodified; they are not operator credentials.

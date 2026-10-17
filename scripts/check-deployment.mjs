@@ -34,7 +34,16 @@ const pass=message=>{results.checks.push(message);console.log("PASS "+message);}
 async function until(fn){const end=Date.now()+60000;do{try{if(await fn())return;}catch{}await new Promise(r=>setTimeout(r,200));}while(Date.now()<end);throw new Error("Deployment deadline");}
 const sql=(project,query)=>dc(project,"exec","-T","postgres","psql","-v","ON_ERROR_STOP=1","-U",env.POSTGRES_USER,"-d",env.POSTGRES_DB,"-At","-c",query);
 async function expectFailure(fn){let failed=false;try{await fn();}catch{failed=true;}assert.ok(failed);}
-async function startDb(project){await dc(project,"up","-d","--no-build","postgres");await until(async()=>await sql(project,"SELECT 1")==="1");}
+async function startDb(project){
+ await dc(project,"up","-d","--no-build","postgres");await until(async()=>await sql(project,"SELECT 1")==="1");
+ // During upgrade tests the initial volume deliberately starts on the old image.
+ if(env.ULDA_POSTGRES_IMAGE===results.auxiliaryImages.postgres.id){
+  assert.equal(await sql(project,"SHOW ssl"),"off");
+  assert.equal(await sql(project,"SELECT count(*) FROM pg_hba_file_rules WHERE auth_method = 'ldap'"),"0");
+  await dc(project,"exec","-T","postgres","sh","-ec","test ! -e /etc/ssl/private/ssl-cert-snakeoil.key && test ! -e /etc/ssl/certs/ssl-cert-snakeoil.pem");
+  pass("current database image has no test TLS identity after initialization; internal PG SSL and LDAP remain disabled");
+ }
+}
 async function setup(project,adopt=false){return dc(project,"run","--rm","--no-deps","-e","ULDA_DB_SETUP=1",...(adopt?["-e","ULDA_DB_ADOPT_EXISTING=1"]:[]),"db-setup");}
 async function migrate(project){await dc(project,"run","--rm","--no-deps","migrate");}
 async function ready(project){

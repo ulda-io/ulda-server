@@ -20,6 +20,8 @@ FROM postgres:18.6-bookworm@sha256:afc7e2d441324c0388fa80c3d24f733b4194a4eb7f47d
 RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && apt-get purge -y --auto-remove postgresql-18-jit gnupg less \
+    # The upstream image's shared test identity must never become a TLS default.
+    && rm -f /etc/ssl/private/ssl-cert-snakeoil.key /etc/ssl/certs/ssl-cert-snakeoil.pem \
     && rm -rf /var/lib/apt/lists/* \
     && find /usr /bin /sbin -xdev -type f -perm /6000 -exec chmod a-s {} +
 COPY --from=gosu-build /out/gosu /usr/local/bin/gosu

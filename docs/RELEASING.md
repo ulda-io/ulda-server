@@ -26,9 +26,14 @@ The security job verifies the archive checksums before scanning the same archive
 with a pinned Trivy executable. It retains all severities, including unfixed CVEs,
 and creates CycloneDX component inventories. High, Critical and unknown severities,
 unsupported OS releases, missing inventories or malformed reports fail the gate.
-There are currently **no vulnerability exceptions**. Existing PostgreSQL findings
-can therefore keep this job red until individually resolved or a reviewed,
-narrowly scoped exception mechanism is introduced. A previous Scout report is
+The only non-affected assessment is Debian bookworm's exact `zlib1g` binary
+package for CVE-2023-45853: that package does not contain MiniZip. The assessment
+is restricted to the PostgreSQL image, OS/package/source versions and package
+file inventory, expires on 2026-11-17, and is invalid if a fixed version appears
+or MiniZip is installed. Raw reports and severity counts remain unchanged; the
+gate lists this finding separately as `notAffected`. Other PostgreSQL findings,
+including libxml2, still block release. See the
+[PostgreSQL review](POSTGRES_SECURITY_REVIEW.md). A previous Scout report is
 not an exemption from the CI scanner's findings. Do not add `--ignore-unfixed`,
 `continue-on-error`, or an unconditional package allowlist to make it green.
 

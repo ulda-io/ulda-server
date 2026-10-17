@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
+import { assessNonAffected } from './vulnerability-assessment.mjs';
 
 export const names = ['server', 'postgres', 'proxy'];
 export const versionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
@@ -50,24 +51,27 @@ export function validateManifest(manifest, commit) {
     assert.match(item.contentIdentity, /^[a-f0-9]{64}$/);
   }
 }
-export function evaluateVulnerabilities(report, expectedImageId) {
+export function evaluateVulnerabilities(report, expectedImageId, context = {}) {
   assert.equal(report.SchemaVersion, 2, 'Unknown scanner report format');
   assert([expectedImageId].flat().includes(report.Metadata?.ImageID), 'Scanner report/image mismatch');
   assert(report.Metadata?.OS?.Family && report.Metadata.OS.Name, 'Missing OS inventory');
   assert.equal(report.Metadata.OS.EOSL ?? false, false, 'Unsupported OS distribution');
   assert(Array.isArray(report.Results) && report.Results.length > 0, 'Empty scanner results');
   assert(report.Results.some(result => Array.isArray(result.Packages) && result.Packages.length > 0), 'Missing package inventory');
-  const counts = {}, blocked = [];
+  const counts = {}, blocked = [], notAffected = [];
   for (const result of report.Results) {
     for (const item of result.Vulnerabilities ?? []) {
       assert(['UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(item.Severity), 'Unknown severity');
       counts[item.Severity] = (counts[item.Severity] ?? 0) + 1;
       if (['HIGH', 'CRITICAL', 'UNKNOWN'].includes(item.Severity)) {
-        blocked.push({ id: item.VulnerabilityID, package: item.PkgName, version: item.InstalledVersion, severity: item.Severity });
+        const finding = { id: item.VulnerabilityID, package: item.PkgName, version: item.InstalledVersion, severity: item.Severity };
+        const assessment = assessNonAffected(report, result, item, context);
+        if (assessment) notAffected.push({ ...finding, ...assessment });
+        else blocked.push(finding);
       }
     }
   }
-  return { counts, blocked, passed: blocked.length === 0 };
+  return { counts, blocked, notAffected, passed: blocked.length === 0 };
 }
 export function validateCapacity(result, seconds) {
   assert.equal(result.status, 'PASS');

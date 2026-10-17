@@ -34,6 +34,20 @@ test("PostgreSQL retains backup/locale tools and drops to the configured non-roo
   `, ["--security-opt","no-new-privileges:true"]).split("\n").at(-1), "PASS");
 });
 
+test("PostgreSQL has no default TLS identity or MiniZip implementation", () => {
+  assert.equal(probe("POSTGRES", `
+    test ! -e /etc/ssl/private/ssl-cert-snakeoil.key
+    test ! -e /etc/ssl/certs/ssl-cert-snakeoil.pem
+    test -z "$(find /etc/ssl/private -type f -print)"
+    test -z "$(find /usr /lib -iname '*minizip*' -print)"
+    if dpkg-query -W -f='\${binary:Package} \${db:Status-Status}\\n' | grep -Ei 'minizip.* installed$'; then exit 1; fi
+    if grep -aq 'zipOpenNewFileInZip' /lib/x86_64-linux-gnu/libz.so.1; then exit 1; fi
+    # PostgreSQL still needs libxml2 and GnuTLS. Removing them would break startup.
+    if ldd /usr/lib/postgresql/18/bin/postgres | grep -q 'not found'; then exit 1; fi
+    printf '\\nPASS'
+  `).split("\n").at(-1), "PASS");
+});
+
 test("slim proxy runs without privileges and omits XML/image dependencies", () => {
   assert.equal(probe("PROXY", `
     test "$(id -u)" = 101

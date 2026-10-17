@@ -17,6 +17,11 @@ resource queries do not require JIT. Do not use this image for unrelated
 workloads that need those tools. Removing files in a derived image does not
 remove their bytes from existing lower image layers.
 
+The inherited snakeoil TLS certificate/key are removed from the final
+filesystem. Public GnuTLS self-test vectors remain intact. See the
+[PostgreSQL security review](POSTGRES_SECURITY_REVIEW.md) for their provenance,
+the lower-layer limitation, and current Critical/High finding assessments.
+
 The official gosu 1.19 implementation is rebuilt with Go 1.26.9 and updated,
 checksum-locked moby/sys/user and x/sys dependencies. Its version label identifies
 the rebuild. The compiler is confined to a build stage; full third-party license
