@@ -20,7 +20,7 @@ export function loadWorkerStatus(child, worker) {
   if (child.failure) {
     const failure = child.failure;
     status.failure = {
-      phase: ['clients', 'warmup', 'measurement', 'verification', 'async', 'update'].includes(failure.phase) ? failure.phase : 'unknown',
+      phase: ['clients', 'warmup', 'measurement', 'verification', 'report', 'async', 'update'].includes(failure.phase) ? failure.phase : 'unknown',
       code: loadFailureCode(failure), attempted: count(failure.attempted), confirmed: count(failure.confirmed),
       failed: count(failure.failed), asyncErrors: count(failure.asyncErrors),
     };

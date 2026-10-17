@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { Histogram, loadOptions, loadFailureCode, loadWorkerStatus } from "./metrics.mjs";
 // Keep candidate loading covered by the existing capacity-tool CI entry.
 import './sdk.test.mjs';
+import './result-delivery.test.mjs';
 
 test('capacity failures expose only fixed codes, never private diagnostics', () => {
   const secret = 'synthetic-private-error-detail';

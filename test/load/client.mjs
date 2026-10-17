@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { performance, monitorEventLoopDelay } from "node:perf_hooks";
 import { Ulda, SocketIoTransport } from "./sdk.mjs";
 import { Histogram, loadFailureCode } from "./metrics.mjs";
+import { deliverResult } from "./result-delivery.mjs";
 
 assert(process.send, "Run via npm run test:capacity");
 const clients = [], latency = new Histogram(), ack = new Histogram();
@@ -77,7 +78,8 @@ try {
     latency:latency.export(),ack:ack.export(),cpuMicros:cpu.user+cpu.system,
     eventLoopP99Ms:eventLoop.percentile(99)/1e6,maxRss:process.resourceUsage().maxRSS*1024,
     finalVerified:clients.length,jsonBytes:Buffer.byteLength(JSON.stringify({seq:clients[0].seq,text}))};
-  send(report);
+  phase = 'report';
+  await deliverResult(process, report);
 } catch (error) { exitCode=1; send({kind:"failed",phase,code:loadFailureCode(error),attempted,confirmed,failed,asyncErrors}); }
 finally {
   // No write replay or superDelete after an ambiguous outcome; parent owns the DB.

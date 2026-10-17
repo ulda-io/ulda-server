@@ -33,6 +33,9 @@ Test summaries remain in ignored `.local/ulda-capacity-*` directories.
 CI retains only their `result.json` files as capacity-report artifacts, including
 failed runs. Failure output contains fixed error codes, worker phases, counters
 and exit status; it never includes raw exceptions, payloads or credential files.
+Each generator waits for the parent to acknowledge receipt of its complete
+histogram report before exiting. Missing confirmation fails the run; a clean
+process exit without a report cannot be accepted as a successful measurement.
 
 ## Profiles and limits
 

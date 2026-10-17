@@ -103,7 +103,10 @@ async function main(){
       if(m.kind==="ready")child.ready=true;
       if(m.kind==="warmed")child.warmed=true;
       if(m.kind==="progress")child.progress=m;
-      if(m.kind==="result")child.report=m;
+      if(m.kind==="result"){
+        child.report=m;
+        if(proc.connected)proc.send({action:"result-received"},error=>{if(error)child.failed=true;});
+      }
       if(m.kind==="abort"||m.kind==="failed"){
         child.failure ??= m; // Worker sends only fixed safe codes and counters.
         child.failed=true;for(const c of children)if(c.proc.connected)c.proc.send({action:"stop"});
