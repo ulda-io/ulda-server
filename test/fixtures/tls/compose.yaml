@@ -1,11 +1,12 @@
-# Merge with the root compose.yaml; Compose >= 2.24.4. Supply real TLS files.
+# Optional TLS test fixture, not the normal server/PostgreSQL deployment.
+# Merge with the root compose.yaml; paths resolve against that first file.
 services:
   server:
     ports: !reset []
   proxy:
     image: "${ULDA_PROXY_IMAGE:-ulda/proxy:local}"
     build:
-      context: ./deploy/proxy
+      context: ./test/fixtures/tls/proxy
     user: "101:101"
     entrypoint: [nginx]
     command: ["-g", "daemon off;"]
@@ -18,7 +19,7 @@ services:
     tmpfs:
       - /tmp:size=16m,mode=1777
     volumes:
-      - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./test/fixtures/tls/nginx.conf:/etc/nginx/nginx.conf:ro
     secrets: [tls_cert, tls_key]
     ports:
       - "${ULDA_TLS_PUBLISH_ADDRESS:-127.0.0.1}:${ULDA_TLS_PORT:-443}:8443"

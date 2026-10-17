@@ -33,7 +33,7 @@ It does not read `.env` itself. Do not regenerate passwords for an existing
 database: changing a mounted file does not change the database's stored password.
 
 The build creates both the application and its PostgreSQL image. PostgreSQL stays
-on version 18 and Debian bookworm/glibc. The TLS overlay adds a separate slim
+on version 18 and Debian bookworm/glibc. The optional TLS test overlay adds a separate slim
 Nginx build. See [auxiliary images](AUXILIARY_IMAGES.md) for package choices,
 immutable image overrides and database minor-update checks.
 
@@ -114,6 +114,12 @@ erase credentials from previously created containers or backups.
 
 ## HTTPS/WSS proxy
 
+Nginx is not required by ULDA and is not included in its application image or
+normal server/PostgreSQL Compose stack. Public deployments need a trusted
+HTTPS/WSS endpoint supplied by their hosting platform or operator. The following
+overlay is an **optional regression fixture** under `test/fixtures/tls`, used to
+test TLS forwarding and recovery. It does not prescribe a production proxy.
+
 Supply a valid certificate chain and matching private key for your domain,
 and set CORS_ORIGINS to the application's exact origins. Set in local `.env`:
 
@@ -128,8 +134,8 @@ CORS_ORIGINS=https://your-application.example
 Then use **both files for subsequent lifecycle commands**:
 
 ```powershell
-docker compose -f compose.yaml -f deploy/compose.tls.yaml build proxy
-docker compose -f compose.yaml -f deploy/compose.tls.yaml up -d --no-build
+docker compose -f compose.yaml -f test/fixtures/tls/compose.yaml build proxy
+docker compose -f compose.yaml -f test/fixtures/tls/compose.yaml up -d --no-build
 ```
 
 The override removes the server's published HTTP port; PostgreSQL remains

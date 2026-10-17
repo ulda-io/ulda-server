@@ -19,7 +19,7 @@ if (action === 'build') {
   const build = { commit, sourceClean, version: JSON.parse(fs.readFileSync('package.json')).version, platform: 'linux/amd64', startedAt: new Date().toISOString(), images: {} };
   for (const name of buildNames) {
     const tag = `ulda-ci/${name}:candidate`;
-    run('docker', ['build', '--pull', '--no-cache', '--platform', 'linux/amd64', '-t', tag, name === 'server' ? '.' : `deploy/${name}`]);
+    run('docker', ['build', '--pull', '--no-cache', '--platform', 'linux/amd64', '-t', tag, name === 'server' ? '.' : name === 'proxy' ? 'test/fixtures/tls/proxy' : `deploy/${name}`]);
     build.images[name] = { tag, id: capture('docker', ['image', 'inspect', tag, '--format', '{{.Id}}']) };
   }
   run('docker', ['pull', '--platform', 'linux/amd64', externalPostgresImage]);

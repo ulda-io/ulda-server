@@ -44,7 +44,10 @@ It has no published port and uses separate runtime/migration credentials.
 
 ## Nginx
 
-`deploy/proxy/Dockerfile` uses official stable Nginx 1.30.6 Alpine 3.24 slim,
+This is an optional TLS regression fixture under `test/fixtures/tls`, not a
+required deployment service or part of the published ULDA server image.
+
+`test/fixtures/tls/proxy/Dockerfile` uses official stable Nginx 1.30.6 Alpine 3.24 slim,
 pinned by digest, plus available Alpine updates. The unused dynamic XML, XSLT,
 image-filter and Perl module dependencies are omitted by this upstream variant.
 Core TLS and WebSocket proxy support remain. The supplied configuration does not
@@ -60,7 +63,7 @@ Use new local tags, not tags serving an active deployment:
 
 ```powershell
 docker build --pull --no-cache -t ulda/postgres:security-check deploy/postgres
-docker build --pull --no-cache -t ulda/proxy:security-check deploy/proxy
+docker build --pull --no-cache -t ulda/proxy:security-check test/fixtures/tls/proxy
 $env:ULDA_TEST_POSTGRES_IMAGE='ulda/postgres:security-check'
 $env:ULDA_TEST_PROXY_IMAGE='ulda/proxy:security-check'
 node --test test/container/auxiliary.test.mjs

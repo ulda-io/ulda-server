@@ -26,13 +26,14 @@ PostgreSQL is the built-in persistent backend. Other databases require a
 
 ## Local development with Docker Compose
 
-The following stack is a disposable development/test example. Its custom
-PostgreSQL and Nginx images have separate [security assessments](docs/POSTGRES_SECURITY_REVIEW.md)
-and are not certified production dependencies of the server release.
+The following disposable development/test stack runs the server and PostgreSQL,
+with one-off database setup and migration jobs. Nginx is not required, started or
+included in the server image.
+The custom PostgreSQL test image has a separate
+[security assessment](docs/POSTGRES_SECURITY_REVIEW.md).
 
 Requirements: Docker with Linux containers, Docker Compose, Node.js 22+ for the
-local password generator, and a free local port (3000 by default). The optional
-TLS configuration requires Compose 2.24.4+.
+local password generator, and a free local port (3000 by default).
 
 From this repository's root, for a **new database volume**:
 
@@ -59,8 +60,10 @@ keeps it; **`down -v` deletes it**.
 For an existing volume, use the explicit
 [adoption procedure](docs/DEPLOYMENT.md#existing-volume-from-the-former-shared-superuser-configuration).
 For remote clients, configure the
-[HTTPS/WSS proxy](docs/DEPLOYMENT.md#httpswss-proxy) and exact application origins.
-The example proxy requires your certificate and does not add application login.
+[HTTPS/WSS endpoint](docs/DEPLOYMENT.md#httpswss-proxy) and exact application origins.
+Use your hosting platform's TLS termination or a reverse proxy of your choice.
+The optional [TLS regression fixture](test/fixtures/tls/README.md) uses Nginx only
+to test encrypted transport; it is not part of the standard deployment.
 
 ## Connect your application
 

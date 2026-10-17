@@ -88,7 +88,7 @@ migration, not just changing an environment variable.
 To test unreleased source locally, build only the application with
 `docker build -t ulda/server:local .` and set `ULDA_SERVER_IMAGE=ulda/server:local`.
 No database build is needed. The root `compose.yaml` and `deploy/postgres` /
-`deploy/proxy` builds remain development/test fixtures with separately documented
+`test/fixtures/tls/proxy` builds remain development/test fixtures with separately documented
 [known findings](POSTGRES_SECURITY_REVIEW.md); they are not published production
 dependencies of this server release.
 

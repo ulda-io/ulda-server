@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { performance, monitorEventLoopDelay } from "node:perf_hooks";
-import { Ulda, SocketIoTransport } from "../consumer/index.mjs";
+import { Ulda, SocketIoTransport } from "./sdk.mjs";
 import { Histogram } from "./metrics.mjs";
 
 assert(process.send, "Run via npm run test:capacity");

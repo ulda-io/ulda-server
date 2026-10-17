@@ -22,6 +22,8 @@ const env={...process.env,ULDA_SECRETS_DIR:path.join(folder,"secrets"),ULDA_SERV
   ULDA_SERVER_PORT:"0",ULDA_PUBLISH_ADDRESS:"127.0.0.1",POSTGRES_USER:"ulda_test_admin",POSTGRES_DB:"ulda_test_"+id};
 // Fixed reviewed default budgets; do not inherit an operator's accidental overrides.
 for(const name of Object.keys(env))if(/^(?:MAX_|DATABASE_|READINESS_|GRACEFUL_|CORS_|COMMAND_BURST$|BINARY_PACKET_TIMEOUT_MS$|PG)/.test(name))delete env[name];
+delete env.ULDA_CAPACITY_SDK_ROOT;
+delete env.TRANSFER_TIMEOUT_MS;
 const overlay=path.join(folder,"capacity.json");
 fs.writeFileSync(overlay,JSON.stringify({services:{server:{cpus:options.profile==="host"?0:1,environment:{LOG_LEVEL:"error"}},postgres:{cpus:options.profile==="host"?0:1}}}));
 const result={status:"RUNNING",startedAt:new Date().toISOString(),options,requestedImage,sdk:"ulda-auth@1.0.1",
@@ -41,6 +43,24 @@ const sql=query=>dc("exec","-T","postgres","psql","-v","ON_ERROR_STOP=1","-U",en
 async function until(check,timeout=60000){const end=Date.now()+timeout;do{try{if(await check())return;}catch{}await new Promise(r=>setTimeout(r,250));}while(Date.now()<end);throw new Error("Capacity setup deadline");}
 async function waitFor(predicate,timeout){const end=Date.now()+timeout;while(!predicate()){if(children.some(c=>c.failed)||Date.now()>end)throw new Error("Capacity worker failed or timed out");await new Promise(r=>setTimeout(r,100));}}
 async function main(){
+  result.sdkSource = 'published registry consumer';
+  if (process.env.ULDA_TEST_SDK_TARBALL) {
+    phase = 'candidate-sdk-install';
+    const archive = fs.realpathSync(process.env.ULDA_TEST_SDK_TARBALL);
+    assert(archive.endsWith('.tgz') && fs.statSync(archive).isFile() && fs.statSync(archive).size <= 10 * 1024 * 1024);
+    result.sdkArchiveSha256 = createHash('sha256').update(fs.readFileSync(archive)).digest('hex');
+    const consumer = path.join(folder, 'consumer'); fs.mkdirSync(consumer);
+    fs.writeFileSync(path.join(consumer, 'package.json'), JSON.stringify({ name: 'ulda-capacity-consumer', private: true, type: 'module' }));
+    assert(process.env.npm_execpath, 'Invoke candidate acceptance with npm run test:capacity.');
+    await run(process.execPath, [process.env.npm_execpath, 'install', '--ignore-scripts', '--no-audit', '--no-fund', '--registry=https://registry.npmjs.org/', archive], { cwd: consumer });
+    assert.equal(createHash('sha256').update(fs.readFileSync(archive)).digest('hex'), result.sdkArchiveSha256);
+    const manifest = JSON.parse(fs.readFileSync(path.join(consumer, 'node_modules/ulda-auth/package.json')));
+    assert.equal(manifest.name, 'ulda-auth');
+    result.sdk = manifest.name + '@' + manifest.version;
+    result.sdkSource = 'explicit local candidate archive, not the published version';
+    env.ULDA_CAPACITY_SDK_ROOT = consumer;
+    result.candidateConsumerLockSha256 = createHash('sha256').update(fs.readFileSync(path.join(consumer, 'package-lock.json'))).digest('hex');
+  }
   result.imageId=await docker("image","inspect",requestedImage,"--format","{{.Id}}");env.ULDA_SERVER_IMAGE=result.imageId;
   result.auxiliaryImages=await auxiliaryImages(docker,id);
   env.ULDA_POSTGRES_IMAGE=result.auxiliaryImages.postgres.id;

@@ -29,7 +29,7 @@ async function run(file,args,options={}) {
  catch {throw new Error("Deployment command failed; private diagnostics suppressed.");}
 }
 const docker=(...args)=>run("docker",args);
-function dc(project,...args) {assert.ok([source,restore].includes(project));projects.add(project);return docker("compose","--project-name",project,"--env-file",path.join(folder,"empty.env"),"-f","compose.yaml","-f","deploy/compose.tls.yaml",...args);}
+function dc(project,...args) {assert.ok([source,restore].includes(project));projects.add(project);return docker("compose","--project-name",project,"--env-file",path.join(folder,"empty.env"),"-f","compose.yaml","-f","test/fixtures/tls/compose.yaml",...args);}
 const pass=message=>{results.checks.push(message);console.log("PASS "+message);};
 async function until(fn){const end=Date.now()+60000;do{try{if(await fn())return;}catch{}await new Promise(r=>setTimeout(r,200));}while(Date.now()<end);throw new Error("Deployment deadline");}
 const sql=(project,query)=>dc(project,"exec","-T","postgres","psql","-v","ON_ERROR_STOP=1","-U",env.POSTGRES_USER,"-d",env.POSTGRES_DB,"-At","-c",query);

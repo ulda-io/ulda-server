@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Histogram, loadOptions } from "./metrics.mjs";
+// Keep candidate loading covered by the existing capacity-tool CI entry.
+import './sdk.test.mjs';
 
 test("merged capacity histograms preserve every sample and expose overflow", () => {
   const a = new Histogram(), b = new Histogram();
