@@ -16,7 +16,12 @@ export interface StoredChange {
   payload?: Uint8Array;
 }
 
-export interface StorageReadBounds { maxWitnessBytes: number; maxPayloadBytes: number }
+export interface StorageReadBounds {
+  maxWitnessBytes: number;
+  maxPayloadBytes: number;
+  /** Sum of witness and payload bytes in aligned result slots, including duplicates. */
+  maxTotalBytes?: number;
+}
 
 export interface ResourceStorage {
   ping(): Promise<void>;
@@ -26,7 +31,7 @@ export interface ResourceStorage {
   /** All entries commit together; missing/duplicate IDs reject the entire batch. */
   applyBatch(changes: readonly StoredChange[]): Promise<void>;
   findById(id: bigint): Promise<ActiveResource | null>;
-  /** Aligned slots. When bounds are supplied, reject oversized rows BEFORE copying
+  /** Aligned slots. When bounds are supplied, reject oversized rows/batches BEFORE copying
    * or transferring their blobs into this process. Custom adapters must honor this. */
   findManyByIds(ids: readonly bigint[], bounds?: StorageReadBounds): Promise<Array<ActiveResource | null>>;
   update(input: {

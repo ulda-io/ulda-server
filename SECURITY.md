@@ -88,7 +88,8 @@ undo the mutation. Deletion notifications contain IDs, without a cryptographic
 proof. The SDK's documented policy trusts the server for these notifications.
 Reconnect requires rereading; it is not proof that every historical event was seen.
 
-Shutdown drains accepted work. Readiness and shutdown deadlines do not cancel
+Shutdown cancels read-capacity waiters before storage and drains active work.
+Readiness and shutdown deadlines do not cancel
 SQL, undo commits or release accepted work early. A forced process kill or network
 partition can leave clients uncertain. [Operational policy](docs/OPERATIONS.md).
 
@@ -106,6 +107,12 @@ The SDK endpoint bounds packet headers, binary attachments, batch sizes,
 connection slots, pending/rate-limited commands, input/copy bytes, active reads,
 subscription edges and outbound bytes/packets. See
 [admission limits](docs/ADMISSION_LIMITS.md) for exact accounting and defaults.
+
+Read reservations use a bounded FIFO wait without increasing the byte budget.
+Expiry/full admission returns a fixed `not_ready` error before storage. It must
+not be treated as a size error or permission to replay a write. Held snapshots
+can delay other clients up to their wait deadline; fairness is by queued command,
+not by user or IP address.
 
 Limits are not a proof of maximum RSS, per-IP fairness or protection of every
 raw TCP/HTTP connection. Reconnecting creates a new decoder rate bucket.

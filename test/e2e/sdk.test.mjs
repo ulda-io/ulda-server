@@ -14,6 +14,16 @@ const pool = new Pool({ connectionString });
 const password = "synthetic-sdk-integration-passphrase";
 const privateName = "private-content-name-never-on-wire";
 const privateText = "synthetic-plaintext-never-on-server";
+
+test('published SDK treats read admission not_ready as a fixed error without replay or local data loss', async t => {
+  const { server, client } = await setup(t), a = client();
+  await a.sdk.register(password); await a.sdk.add('checked-content', { n: 1 });
+  const before = a.sdk.snapshot(); a.trace.length = 0;
+  server.admission.reads.stop();
+  await assert.rejects(a.sdk.refresh(), { code: 'SERVER_ERROR' });
+  assert.deepEqual(a.sdk.snapshot(), before);
+  assert.deepEqual(a.trace.filter(x => x.phase === 'send').map(x => x.event), ['ulda:read']);
+});
 const dbOptions = { connectionString, maxConnections: 4, connectionTimeoutMs: 5000, idleTimeoutMs: 5000 };
 before(async () => {
   const connection = await pool.connect();

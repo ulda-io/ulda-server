@@ -77,9 +77,12 @@ export class InMemoryResourceStorage implements ResourceStorage {
 
   async findManyByIds(ids: readonly bigint[], bounds?: StorageReadBounds): Promise<Array<ActiveResource | null>> {
     // Check the entire batch before defensive copies, including a bad last row.
+    let total = 0;
     if (bounds) for (const id of ids) {
       const row = this.#records.get(id);
-      if (row && (row.witness.byteLength > bounds.maxWitnessBytes || row.payload.byteLength > bounds.maxPayloadBytes)) {
+      if (row) total += row.witness.byteLength + row.payload.byteLength;
+      if (row && (row.witness.byteLength > bounds.maxWitnessBytes || row.payload.byteLength > bounds.maxPayloadBytes
+        || (bounds.maxTotalBytes !== undefined && total > bounds.maxTotalBytes))) {
         throw new DomainError("rate_limited", "Stored row exceeds read bounds.");
       }
     }

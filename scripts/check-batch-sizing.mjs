@@ -13,7 +13,8 @@ import { httpReady } from '../test/support/http-probe.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url)); process.chdir(root);
 const diagnostic = process.argv[2] === '--diagnose-read-budget';
-assert(process.argv.length === (diagnostic ? 3 : 2), 'Only --diagnose-read-budget is supported');
+const large = process.argv[2] === '--large-payloads';
+assert(process.argv.length === (diagnostic || large ? 3 : 2), 'Unsupported sizing option');
 const npm = process.env.npm_execpath ?? path.join(path.dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js');
 assert(fs.existsSync(npm), 'npm CLI is required to install the isolated archive.');
 const image = process.env.ULDA_TEST_IMAGE, postgres = process.env.ULDA_TEST_POSTGRES_IMAGE;
@@ -25,13 +26,15 @@ const folder = path.join(root, '.local', name); fs.mkdirSync(folder, { recursive
 const env = { ...process.env, POSTGRES_USER: 'ulda_test', POSTGRES_DB: 'ulda_test_' + id, POSTGRES_PASSWORD: randomUUID() };
 for (const key of Object.keys(env)) if (/^(?:PG|DATABASE_|NODE_OPTIONS$)/.test(key)) delete env[key];
 const result = { status: 'RUNNING', startedAt: new Date().toISOString(), sdkArchiveSha256: createHash('sha256').update(fs.readFileSync(archive)).digest('hex'),
-  sizes: diagnostic ? [64] : [16, 32, 64, 100, 200], rounds: diagnostic ? 1 : 3, runs: [], profiles: [
+  sizes: diagnostic || large ? [64] : [16, 32, 64, 100, 200], rounds: diagnostic ? 1 : 3, runs: [], profiles: large ? [
+    { name: 'concurrent-large-payload', clients: 100, contents: 16, bytes: 524288 },
+  ] : [
     { name: 'single-small', clients: 1, contents: 1000, bytes: 1024 },
     { name: 'concurrent-small', clients: 100, contents: 200, bytes: 1024 },
     { name: 'concurrent-medium', clients: 100, contents: 200, bytes: 32768 },
   ], readBudgetBytes: diagnostic ? 4294967296 : 268435456,
   scope: diagnostic ? 'diagnostic only: isolated 4 GiB read reservation, unchanged 1 GiB container; not a production setting or sizing acceptance'
-    : 'full SDK open/decrypt, disjoint encrypted IDs, default server admission; patched isolated copies only', phase: 'prepare' };
+    : 'full SDK connect and synchronized refresh/decrypt, disjoint encrypted IDs, default SDK timeout and server admission; patched isolated copies only', phase: 'prepare' };
 let pool, networkCreated = false, app, db, children = [];
 async function run(file, args, options = {}) {
   try { return (await promisify(execFile)(file, args, { cwd: root, env, timeout: 180000, windowsHide: true, maxBuffer: 16 * 1024 * 1024, ...options })).stdout.trim(); }
@@ -57,24 +60,37 @@ function patchOne(file, before, after) {
   fs.writeFileSync(file, text.replace(before, after));
 }
 async function measure(profile, batch, round, entry, url) {
+  const cpu = async () => {
+    const value = await docker('exec', app, 'cat', '/sys/fs/cgroup/cpu.stat');
+    const usage = Number(value.match(/^usage_usec (\d+)$/m)?.[1]); assert(Number.isSafeInteger(usage));
+    return { usage, at: Date.now() };
+  };
   children = [];
   const workerCount = Math.min(4, profile.clients);
   for (let i = 0; i < workerCount; i++) {
     const proc = fork('test/load/batch-client.mjs', [], { cwd: root, env, windowsHide: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
-    const child = { proc, ready: false, exited: false, failed: false, report: null }; children.push(child);
-    proc.on('message', m => { if (m.kind === 'ready') child.ready = true; if (m.kind === 'result') child.report = m; if (m.kind === 'failed') child.failed = true; });
+    const child = { proc, ready: false, connected: false, exited: false, failed: false, report: null }; children.push(child);
+    proc.on('message', m => { if (m.kind === 'ready') child.ready = true; if (m.kind === 'connected') child.connected = true; if (m.kind === 'result') child.report = m; if (m.kind === 'failed') child.failed = true; });
     proc.on('error', () => { child.failed = true; });
     proc.on('exit', code => { child.exited = true; if (code || !child.report) child.failed = true; });
     proc.send({ action: 'init', entry, url, password: profile.password, contents: profile.contents,
       masters: profile.masters.filter((_, n) => n % workerCount === i) });
   }
   await waitForWorkers(() => children.every(c => c.ready));
+  const cpuBefore = await cpu();
   const start = Date.now() + 250;
   for (const c of children) c.proc.send({ action: 'start', at: start });
+  await waitForWorkers(() => children.every(c => c.connected), 180000);
+  const cpuConnected = await cpu();
+  const refreshAt = Date.now() + 250;
+  for (const c of children) c.proc.send({ action: 'refresh', at: refreshAt });
   await waitForWorkers(() => children.every(c => c.exited), 180000);
   assert(!children.some(c => c.failed));
-  const reports = children.map(c => c.report), samples = reports.flatMap(r => r.samples);
-  assert(reports.reduce((n, r) => n + r.reads, 0) >= profile.clients, 'Missing transport read instrumentation');
+  const cpuRefreshed = await cpu();
+  for (const phase of ['connect', 'refresh']) {
+  const reports = children.map(c => c.report.measurements.find(x => x.phase === phase)), samples = reports.flatMap(r => r.samples);
+  const skippedClients = reports.reduce((n, r) => n + r.skipped, 0);
+  assert(reports.reduce((n, r) => n + r.reads, 0) >= profile.clients - skippedClients, 'Missing transport read instrumentation');
   const limitsByRequestSize = {};
   for (const report of reports) for (const [size, count] of Object.entries(report.limitsByRequestSize))
     limitsByRequestSize[size] = (limitsByRequestSize[size] ?? 0) + count;
@@ -84,9 +100,9 @@ async function measure(profile, batch, round, entry, url) {
   };
   const summary = key => distribution(samples.filter(x => x[key] !== undefined).map(x => x[key]));
   const elapsedMs = Math.max(...reports.map(x => x.elapsedMs));
-  const measured = { profile: profile.name, batch, round, clients: profile.clients, contents: profile.contents, jsonBytes: profile.bytes,
+  const measured = { profile: profile.name, phase, batch, round, clients: profile.clients, contents: profile.contents, jsonBytes: profile.bytes,
     errors: reports.reduce((n, x) => n + x.errors, 0), limitResponses: reports.reduce((n, x) => n + x.limits, 0), reads: reports.reduce((n, x) => n + x.reads, 0),
-    asyncErrors: reports.reduce((n, x) => n + x.asyncErrors, 0),
+    asyncErrors: reports.reduce((n, x) => n + x.asyncErrors, 0), skippedClients,
     limitsByRequestSize, failedStages: samples.filter(x => x.code).map(x => x.stage),
     elapsedMs, open: summary('openMs'), content: summary('contentMs'),
     readAckMs: distribution(reports.flatMap(x => x.readAcks)),
@@ -94,10 +110,15 @@ async function measure(profile, batch, round, entry, url) {
     generatorEventLoopP99Ms: reports.map(x => x.loopP99Ms),
     generatorRssBytes: reports.reduce((n, x) => n + x.maxRssBytes, 0), codes: samples.filter(x => x.code).map(x => x.code) };
   const stats = JSON.parse(await docker('stats', '--no-stream', '--format', '{{json .}}', app));
+  const [before, after] = phase === 'connect' ? [cpuBefore, cpuConnected] : [cpuConnected, cpuRefreshed];
+  measured.serverCpuMicros = after.usage - before.usage;
+  measured.serverCpuWindowMs = after.at - before.at;
+  measured.serverCpuCores = measured.serverCpuMicros / 1000 / measured.serverCpuWindowMs;
   measured.serverMemory = stats.MemUsage;
   measured.serverPeakBytes = Number(await docker('exec', app, 'cat', '/sys/fs/cgroup/memory.peak'));
   result.runs.push(measured);
-  console.log(JSON.stringify({ profile: profile.name, batch, round, errors: measured.errors, limits: measured.limitResponses, reads: measured.reads, elapsedMs: Math.round(measured.elapsedMs), p95ContentMs: Math.round(measured.content.p95 ?? 0) }));
+  console.log(JSON.stringify({ profile: profile.name, phase, batch, round, errors: measured.errors, limits: measured.limitResponses, reads: measured.reads, elapsedMs: Math.round(measured.elapsedMs), p95Ms: Math.round(measured.open.p95 ?? 0) }));
+  }
   fs.writeFileSync(path.join(folder, 'progress.json'), JSON.stringify({ ...result, profiles: result.profiles.map(({ masters, password, ...p }) => p) }, null, 2));
 }
 try {

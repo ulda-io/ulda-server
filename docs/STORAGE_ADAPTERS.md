@@ -24,7 +24,9 @@ is supplied or advertised as compatible.
 Use lossless IDs compatible with the protocol's positive BIGINT range. Preserve
 all witness/payload bytes and return defensive copies. When read bounds are
 provided, reject oversized records before transferring or copying their blobs
-into the server process. Do not implement bounded reads by fetching unbounded
+into the server process. Honor optional `maxTotalBytes` across witness/payload
+bytes of every requested result slot, including duplicate IDs. Check lengths and
+fetch payloads from the same read snapshot. Do not implement bounded reads by fetching unbounded
 payloads first. Use parameterized queries and keep backend error details out of
 public responses and logs.
 

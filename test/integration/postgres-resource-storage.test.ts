@@ -1,7 +1,7 @@
 import { requireTestDatabase } from "../support/test-database.mjs";
 import { resolve } from "node:path";
 
-import { Pool } from "pg";
+import { Pool, types } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { runPostgresMigrations } from "../../src/storage/postgres/migrations.js";
@@ -42,6 +42,23 @@ afterAll(async () => {
 });
 
 describe("PostgresResourceStorage", () => {
+  it('rejects aggregate and duplicate-slot overflow before any BYTEA reaches the driver parser', async () => {
+    await storage.createBatch(Array.from({ length: 2 }, () => ({ witness: Uint8Array.of(1), payload: new Uint8Array(15) })));
+    const bounds = { maxWitnessBytes: 167, maxPayloadBytes: 1_100_000, maxTotalBytes: 31 };
+    const original = types.getTypeParser(17, 'text'); let decoded = 0;
+    types.setTypeParser(17, 'text', value => { decoded++; return original(value); });
+    try {
+      await expect(storage.findManyByIds([1n, 2n], bounds)).rejects.toMatchObject({ code: 'rate_limited' });
+      expect(decoded).toBe(0);
+      await expect(storage.findManyByIds([1n, 1n], bounds)).rejects.toMatchObject({ code: 'rate_limited' });
+      expect(decoded).toBe(0);
+      const exact = await storage.findManyByIds([1n, 2n], { ...bounds, maxTotalBytes: 32 });
+      expect(exact.map(x => x?.id)).toEqual([1n, 2n]); expect(decoded).toBe(4);
+      const missing = await storage.findManyByIds([3n, 1n], { ...bounds, maxTotalBytes: 16 });
+      expect(missing.map(x => x?.id ?? null)).toEqual([null, 1n]);
+      expect(await storage.findManyByIds([1n, 2n], { maxWitnessBytes: 167, maxPayloadBytes: 1_100_000 })).toHaveLength(2);
+    } finally { types.setTypeParser(17, 'text', original); }
+  });
   it("bounds BYTEA in SQL before transfer, preserving aligned reads and the stored row", async () => {
     await storage.createBatch([
       { witness: Uint8Array.of(1), payload: Uint8Array.of(2) },

@@ -34,7 +34,7 @@ it("copy reservation fails with a fixed ACK before Create and frees memory for t
   expect(await ack(a, "create", [item()])).toEqual({ ok: true, data: ["1"] });
   expect(server!.admission.input.used).toBe(0);
 });
-it("active read reserve rejects independent extra work before storage, then becomes reusable", async () => {
+it("active read reserve queues independent work before storage and keeps existing byte limits", async () => {
   const entered = gate(), release = gate(); let blocked = true, calls = 0;
   class Storage extends InMemoryResourceStorage {
     override async findManyByIds(ids: readonly bigint[], bounds?: StorageReadBounds) {
@@ -46,11 +46,51 @@ it("active read reserve rejects independent extra work before storage, then beco
   await setup({ maxActiveReadBytes: perRow }, new Storage()); const a = await connect(), b = await connect();
   await ack(a, "create", [item(), item()]);
   const read = ack(a, "read", ["1"]); await entered.promise;
-  expect(await ack(b, "read", ["2"])).toEqual({ ok: false, error: "too_large" });
+  const waiting = ack(b, "read", ["2"]);
+  await expect.poll(() => server!.admission.reads.waiting).toBe(1);
   expect(calls).toBe(1); expect(server!.router.subscriptions(b.id!)).toEqual([]);
   blocked = false; release.resolve(); expect((await read).ok).toBe(true);
-  expect((await ack(b, "read", ["2"])).ok).toBe(true);
+  expect((await waiting).ok).toBe(true);
+  expect(calls).toBe(2); expect(server!.admission.reads.peak).toBe(perRow);
   expect(server!.admission.reads.used).toBe(0); expect(server!.admission.input.used).toBe(0);
+});
+
+it('disconnect removes a waiting read without querying storage or freeing an active read early', async () => {
+  const entered = gate(), release = gate(); let calls = 0;
+  class Storage extends InMemoryResourceStorage {
+    override async findManyByIds(ids: readonly bigint[], bounds?: StorageReadBounds) {
+      calls++; entered.resolve(); await release.promise; return super.findManyByIds(ids, bounds);
+    }
+  }
+  const perRow = SDK_LIMITS.payloadBytes + SDK_LIMITS.witnessBytes;
+  await setup({ maxActiveReadBytes: perRow }, new Storage()); const a = await connect(), b = await connect();
+  await ack(a, 'create', [item(), item()]);
+  const active = ack(a, 'read', ['1']); await entered.promise;
+  const waiting = ack(b, 'read', ['2']).catch(() => null);
+  await expect.poll(() => server!.admission.reads.waiting).toBe(1);
+  b.disconnect();
+  await expect.poll(() => server!.admission.reads.waiting).toBe(0);
+  await expect.poll(() => server!.admission.pending).toBe(1);
+  expect(server!.admission.reads.used).toBe(perRow); expect(calls).toBe(1);
+  release.resolve(); await active; await waiting;
+  expect(server!.admission.reads.used).toBe(0); expect(server!.admission.input.used).toBe(0);
+});
+
+it('shutdown rejects read waiters but drains the active storage operation before closing', async () => {
+  const entered = gate(), release = gate(); let calls = 0;
+  class Storage extends InMemoryResourceStorage {
+    override async findManyByIds(ids: readonly bigint[], bounds?: StorageReadBounds) {
+      calls++; entered.resolve(); await release.promise; return super.findManyByIds(ids, bounds);
+    }
+  }
+  await setup({ maxActiveReadBytes: SDK_LIMITS.payloadBytes + SDK_LIMITS.witnessBytes }, new Storage());
+  const a = await connect(), b = await connect(); await ack(a, 'create', [item(), item()]);
+  const reading = ack(a, 'read', ['1']).catch(() => null); await entered.promise;
+  const queued = ack(b, 'read', ['2']); await expect.poll(() => server!.admission.reads.waiting).toBe(1);
+  const current = server!; let closed = false; const closing = current.close().then(() => { closed = true; });
+  expect(await queued).toEqual({ ok: false, error: 'not_ready' }); expect(closed).toBe(false); expect(calls).toBe(1);
+  release.resolve(); await reading; await closing; server = undefined;
+  expect(current.admission.input.used).toBe(0); expect(current.admission.reads.used).toBe(0); expect(current.admission.pending).toBe(0);
 });
 it("disconnect does not free accepted mutation memory or skip graceful drain", async () => {
   const entered = gate(), release = gate();

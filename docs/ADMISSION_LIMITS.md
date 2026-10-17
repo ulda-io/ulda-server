@@ -2,8 +2,8 @@
 
 The default SDK endpoint bounds connections, retained input, concurrent reads,
 outbound messages, queued work and subscriptions. Work reserves capacity before
-using the corresponding resources. Capacity exhaustion rejects admission instead
-of adding to an unbounded queue.
+using the corresponding resources. Read-capacity contention has a bounded FIFO
+wait; other capacity failures reject admission instead of adding to an unbounded queue.
 
 There is one process, one Router and independent per-ID queues, without a global
 execution lock. These controls apply to `ulda:*`; the explicit legacy benchmark
@@ -91,16 +91,40 @@ reserves 70410688 bytes. One ID needs at least 1100167 bytes; a two-resource
 Update needs 2200334. A smaller budget can reject even tiny actual records.
 Commands waiting for Router keys do not hold active-read capacity yet.
 
-PostgreSQL checks each column length in SQL before transferring oversized BYTEA
-values into Node. Any oversized member rejects the operation. The in-memory test
-adapter checks before copying. Custom `findManyByIds(ids,bounds)` adapters must
-honor bounds before transfer/copying; a later service check cannot undo an
-allocation already made by trusted code.
+After acquiring all Router keys, a command waits up to 5000 ms for its read
+reservation. At most `min(1024, MAX_QUEUED_TOTAL)` reservations can wait; existing
+input, pending-command and Router-key budgets also continue to apply. Waiting
+commands retain only bounded input and queue metadata, not query results.
+No storage read starts before capacity is granted. FIFO order prevents smaller
+new requests from bypassing an older large one. The byte budget is unchanged.
 
-The aggregate Read response is checked after selection. SQL does not impose a
-separate aggregate batch ceiling; the read reservation covers all worst-case
-positions. Read capacity is released after the Read ACK or after mutation
-validation finishes. Transport output has separate accounting.
+Queue exhaustion or expiry returns `not_ready`; a reservation larger than the
+entire configured budget still returns `too_large`. Disconnect/session close
+cancels waiting reservations. Shutdown cancels waiters and drains active storage
+operations. Once SQL starts, disconnect does not release its reservation early.
+The internal admission snapshot includes `waitingReads`.
+
+Every read/validation acquires all Router keys before requesting read capacity;
+a granted reservation never waits for another key or a second reservation.
+Large-read continuation frames use their pinned snapshot without acquiring
+either. This ordering prevents a resource-lock/read-budget cycle. A slow or
+abandoned pinned read can still exhaust other callers' bounded wait; its own
+absolute transfer deadline and disconnect cleanup remain in force.
+
+PostgreSQL checks each column length and, for ordinary Read, the aggregate
+witness/payload size before transferring BYTEA values into Node. One statement
+uses the same MVCC snapshot for checks and bytes, with no metadata/payload race.
+Any oversized member or aggregate rejects the whole operation without returning
+payloads. Aggregate accounting includes repeated result slots. The in-memory
+test adapter checks before copying. Custom `findManyByIds(ids,bounds)` adapters
+must honor per-row and optional `maxTotalBytes` bounds before transfer/copying;
+a later service check cannot undo an allocation already made by trusted code.
+
+Ordinary Read passes the unchanged 8 MiB aggregate wire ceiling to storage and
+checks it again before ACK. Validation and pinned large reads keep their own
+per-row bounds and conservative reservations; the ordinary wire ceiling does
+not restrict a staged atomic operation. Read capacity is released after the Read
+ACK or after mutation validation finishes. Output has separate accounting.
 
 Subscription capacity is reserved per connection and globally before awaits or
 writes. Existing edges are not duplicated; concurrent requests include already
@@ -127,7 +151,7 @@ A large singleton read pins one ciphertext version and reserves
 `3 × (MAX_RESOURCE_BYTES + 167)` bytes until the last fragment, expiry or close.
 Validation of an oversized current row uses the same conservative reservation.
 At the defaults, one such reservation is about 192 MiB; concurrent large reads
-can receive `too_large` under the 256 MiB read budget. A small configured read
+use the same bounded FIFO admission under the 256 MiB read budget. A small configured read
 budget can reject an otherwise small resource on this path. No partial snapshot
 is exposed to the SDK. Ordinary reads retain their existing accounting.
 
@@ -153,7 +177,8 @@ reservations. Committed writes stay committed.
 | --- | --- |
 | No handshake capacity | Connection rejected; Socket.IO connect_error |
 | Shutdown in progress | New handshake/work rejected as not ready |
-| Copy/read/subscription/Router capacity exhausted before mutation | ACK `{ok:false,error:"too_large"}`; no mutation by that command |
+| Copy/subscription/Router capacity exhausted, or read reservation cannot fit the entire budget | ACK `{ok:false,error:"too_large"}`; no mutation by that command |
+| Read-capacity wait full, expired or cancelled before storage | ACK `{ok:false,error:"not_ready"}` while the connection remains available; no mutation by that command |
 | Parser size/rate/pending/deadline violation | Connection closed; a negative ACK is not guaranteed |
 | Output exhausted | Recipient closed; committed data is retained |
 | Unexpected failure after mutation starts | Writer closed without a negative ACK; unknown result |
@@ -162,6 +187,11 @@ A sent write may be uncertain after connection loss even if the server actually
 rejected it before SQL. The client cannot infer definite failure without a reply.
 There is no automatic mutation replay. Read after reconnect reconciles known IDs;
 a lost Create ACK cannot recover the generated ID.
+
+Published `ulda-auth@1.0.1` and the large-catalog candidate map `not_ready` to the
+fixed `SERVER_ERROR` code. They do not split or retry it. Successful queued reads
+use the existing ACK format and need no client changes. Only a confirmed
+`too_large` read can trigger the candidate's size fallback.
 
 ## Observation and deployment
 

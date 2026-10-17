@@ -2,6 +2,14 @@
 
 ## 1.0.0
 
+- Bounded FIFO admission for concurrent reads and mutation validation without
+  increasing byte limits; cancellation, shutdown cleanup and distinct temporary
+  `not_ready` rejection prevent read-splitting storms under budget contention.
+- PostgreSQL checks ordinary Read's aggregate byte bound in the same query before
+  returning any BYTEA, avoiding oversized result transfers followed by a size retry.
+- Reproducible batch-size comparisons now measure synchronized Refresh as well
+  as Connect, with a separate large-payload regression.
+
 - Large encrypted resource transfers, bounded read fragments and staged mutation
   uploads with one atomic commit; compatible ordinary SDK CRUD remains unchanged.
 - Fragmented Changed delivery for capable clients; legacy recipients are closed

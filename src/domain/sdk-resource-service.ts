@@ -10,15 +10,19 @@ export class SdkResourceService {
     readonly proof: ProofVerifier,
   ) {}
 
-  async read(ids: readonly bigint[], maxPayloadBytes: number = SDK_LIMITS.payloadBytes): Promise<ActiveResource[]> {
+  async read(ids: readonly bigint[], maxPayloadBytes: number = SDK_LIMITS.payloadBytes, maxTotalBytes?: number): Promise<ActiveResource[]> {
     const found = await this.storage.findManyByIds(ids, {
       maxWitnessBytes: SDK_LIMITS.witnessBytes, maxPayloadBytes,
+      ...(maxTotalBytes === undefined ? {} : { maxTotalBytes }),
     });
     if (found.length !== ids.length) throw new Error("Invalid storage batch.");
+    let total = 0;
     return found.map((resource, index) => {
       if (resource === null) throw new DomainError("not_found", "Resource was not found.");
       if (resource === undefined || resource.id !== ids[index]) throw new Error("Misaligned storage batch.");
       if (resource.witness.byteLength > SDK_LIMITS.witnessBytes || resource.payload.byteLength > maxPayloadBytes) throw new SdkLimitError();
+      total += resource.witness.byteLength + resource.payload.byteLength;
+      if (maxTotalBytes !== undefined && total > maxTotalBytes) throw new SdkLimitError();
       return resource;
     });
   }

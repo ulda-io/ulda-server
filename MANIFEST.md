@@ -56,7 +56,8 @@ mechanisms introduce no master/content metadata or persisted operation IDs.
 Every command requires its body and a Socket.IO ACK callback. Incoming packets
 and copies must obtain admission capacity before allocating protected resources.
 
-1. **Read:** validate the complete ID array; acquire keys; reserve read and
+1. **Read:** validate the complete ID array; acquire keys; wait within bounded
+   FIFO admission for read capacity; reserve
    subscription capacity; fetch all records; check completeness and response
    size; subscribe the live connection; return the ordered records.
 2. **Create:** validate every entry; reserve subscription capacity; insert the
@@ -74,8 +75,8 @@ and copies must obtain admission capacity before allocating protected resources.
 5. **Hello:** confirm that the router accepts work. It is not authentication or
    a database readiness probe.
 6. **Session close:** remove the connection's subscriptions and end its logical
-   session. Already accepted writes continue. Further work requires a new
-   connection.
+   session. Storage writes already started continue. Work still waiting for read
+   capacity is cancelled before storage. Further work requires a new connection.
 
 A late invalid member rejects the entire command before mutation. PostgreSQL
 uses one checked-out connection for BEGIN, all batch mutations and COMMIT.

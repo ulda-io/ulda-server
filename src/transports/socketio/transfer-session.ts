@@ -93,36 +93,36 @@ export class TransferSession {
   #stage: StagedWrite | undefined;
   #committing = false;
   #reading = false;
-  #read: { resource: ActiveResource; offset: number; charge: number; timer: NodeJS.Timeout } | undefined;
+  #read: { resource: ActiveResource; offset: number; release(): void; timer: NodeJS.Timeout } | undefined;
   constructor(readonly socket: Socket, readonly service: SdkResourceService, readonly router: RequestRouter,
     readonly admission: ServerAdmission, readonly config: AppConfig,
     readonly reserveSubscriptions: (ids: readonly bigint[] | number) => () => void,
     readonly subscribe: (ids: readonly bigint[]) => void,
     readonly publish: (changes: readonly StoredChange[]) => void,
-    readonly active: () => boolean) {}
+    readonly active: () => boolean, readonly signal: AbortSignal) {}
 
   close() { this.#stage?.release(); this.#stage = undefined; this.#clearRead(); }
   #clearRead() {
-    if (this.#read) { clearTimeout(this.#read.timer); this.admission.reads.release(this.#read.charge); this.#read = undefined; }
+    if (this.#read) { clearTimeout(this.#read.timer); this.#read.release(); this.#read = undefined; }
   }
   async #validate(changes: readonly StoredChange[]): Promise<void> {
     const charge = changes.length * (SDK_LIMITS.payloadBytes + SDK_LIMITS.witnessBytes);
-    if (!this.admission.reads.acquire(charge)) throw new SdkLimitError();
+    const releaseRead = await this.admission.reads.reserve(charge, this.signal);
     let retry = false;
     try { await this.service.validate(changes); }
     catch (error) {
       if (error instanceof SdkLimitError || (error instanceof DomainError && error.code === 'rate_limited')) retry = true;
       else throw error;
-    } finally { this.admission.reads.release(charge); }
+    } finally { releaseRead(); }
     if (!retry) return;
     if (changes.length > 1) {
       const middle = Math.ceil(changes.length / 2);
       await this.#validate(changes.slice(0, middle)); await this.#validate(changes.slice(middle));
     } else {
       const largeCharge = (this.config.limits.maxResourceBytes + SDK_LIMITS.witnessBytes) * 3;
-      if (!this.admission.reads.acquire(largeCharge)) throw new SdkLimitError();
+      const releaseLarge = await this.admission.reads.reserve(largeCharge, this.signal);
       try { await this.service.validate(changes, this.config.limits.maxResourceBytes); }
-      finally { this.admission.reads.release(largeCharge); }
+      finally { releaseLarge(); }
     }
   }
   async handle(raw: unknown, reply: (value: unknown) => void, mutationStarted: () => void): Promise<void> {
@@ -187,15 +187,16 @@ export class TransferSession {
         this.#clearRead();
         await this.router.runResources([id], async () => {
           const charge = (this.config.limits.maxResourceBytes + SDK_LIMITS.witnessBytes) * 3;
-          if (!this.admission.reads.acquire(charge)) throw new SdkLimitError();
+          const releaseRead = await this.admission.reads.reserve(charge, this.signal);
           let retained = false, release = () => {};
           try {
+            if (!this.active()) throw invalidRequest('Disconnected read.');
             release = this.reserveSubscriptions([id]);
             const [resource] = await this.service.read([id], this.config.limits.maxResourceBytes);
             if (!resource || !this.active()) throw invalidRequest('Disconnected read.');
             const timer = setTimeout(() => this.#clearRead(), this.config.limits.transferTimeoutMs); timer.unref();
-            this.#read = { resource, offset: 0, charge, timer }; retained = true; this.subscribe([id]);
-          } finally { release(); if (!retained) this.admission.reads.release(charge); }
+            this.#read = { resource, offset: 0, release: releaseRead, timer }; retained = true; this.subscribe([id]);
+          } finally { release(); if (!retained) releaseRead(); }
         });
       }
       const cached = this.#read;

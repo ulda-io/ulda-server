@@ -100,6 +100,42 @@ it('rejects duplicates and out-of-order fragments without any write', async () =
   expect((await db.findById(1n))!.witness).toEqual(witness(1));
 });
 
+it('pinned read fragments can finish while a queued batch holds keys needed by a writer', async () => {
+  const { db, socket, connect } = await setup({}, 65), reader = await connect(), writer = await connect();
+  await db.applyBatch([{ id: 1n, witness: witness(1), payload: new Uint8Array(2_100_000) }]);
+  const first = await ack(socket, { kind: 'read', resourceId: '1', offset: 0 });
+  const ids = Array.from({ length: 64 }, (_, i) => String(i + 2));
+  const reading = reader.timeout(10000).emitWithAck('ulda:read', ids);
+  await vi.waitFor(() => expect(server!.admission.reads.waiting).toBe(1));
+  const updating = writer.timeout(10000).emitWithAck('ulda:update', [{ id: '2', witness: witness(2), payload: Uint8Array.of(9) }]);
+  // Continuation frames use the pinned snapshot, without acquiring more keys
+  // or another read reservation. They therefore cannot form a lock cycle.
+  let offset = first.data.payload.length;
+  while (offset < 2_100_000) {
+    const part = await ack(socket, { kind: 'read', resourceId: '1', offset });
+    expect(part.ok).toBe(true); offset += part.data.payload.length;
+  }
+  const read = await reading; expect(read.ok).toBe(true); expect(read.data).toHaveLength(64);
+  expect([...read.data[0].payload]).toEqual([7]);
+  expect(await updating).toEqual({ ok: true }); expect((await db.findById(2n))!.payload[0]).toBe(9);
+  expect(server!.admission.reads.used).toBe(0); expect(server!.admission.reads.waiting).toBe(0);
+  expect(server!.admission.reads.peak).toBeLessThanOrEqual(server!.admission.reads.limit);
+});
+
+it('disconnect cancels a queued large read without retaining its input or a pinned snapshot', async () => {
+  const { db, socket, connect } = await setup({}, 2), peer = await connect();
+  await db.applyBatch([{ id: 1n, witness: witness(1), payload: new Uint8Array(2_100_000) }]);
+  expect((await ack(socket, { kind: 'read', resourceId: '1', offset: 0 })).ok).toBe(true);
+  const held = server!.admission.reads.used;
+  const waiting = ack(peer, { kind: 'read', resourceId: '2', offset: 0 }).catch(() => null);
+  await vi.waitFor(() => expect(server!.admission.reads.waiting).toBe(1));
+  peer.disconnect(); await waiting;
+  await vi.waitFor(() => expect(server!.admission.reads.waiting).toBe(0));
+  expect(server!.admission.reads.used).toBe(held);
+  socket.disconnect(); await vi.waitFor(() => expect(server!.admission.reads.used).toBe(0));
+  expect(server!.admission.input.used).toBe(0);
+});
+
 it('disconnect releases uncommitted staging; a different socket cannot commit its token', async () => {
   const { socket, connect, db } = await setup();
   const token = await stage(socket, [{ id: '1', witness: witness(2) }]);

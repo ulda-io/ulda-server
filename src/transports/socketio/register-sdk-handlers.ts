@@ -1,4 +1,5 @@
 import type { Server } from "socket.io";
+import { setMaxListeners } from 'node:events';
 import type { ServerAdmission } from "../../admission/server-admission.js";
 import type { AppConfig } from "../../config/config.js";
 import { DomainError } from "../../domain/errors.js";
@@ -35,16 +36,14 @@ export function registerSdkHandlers(options: {
       admission.bodies.set(body, lease); // ACK may be wrapped/dropped by instrumentation.
       next(); // Lease stays decoder-owned across Socket.IO's next-tick dispatch.
     });
-    const reserveRead = (count: number) => {
-      const bytes = count * (SDK_LIMITS.payloadBytes + SDK_LIMITS.witnessBytes);
-      if (!admission.reads.acquire(bytes)) throw new SdkLimitError();
-      let released = false;
-      return () => { if (!released) { released = true; admission.reads.release(bytes); } };
-    };
+    const lifetime = new AbortController();
+    setMaxListeners(config.limits.maxPendingCommandsPerSocket + 1, lifetime.signal);
+    const reserveRead = (count: number) => admission.reads.reserve(
+      count * (SDK_LIMITS.payloadBytes + SDK_LIMITS.witnessBytes), lifetime.signal);
     socket.on("error", () => socket.conn.close(true));
     let ended = false;
     let reservations = 0;
-    const finishSession = () => { ended = true; transfers.close(); router.unsubscribeSocket(socket.id); };
+    const finishSession = () => { ended = true; lifetime.abort(); transfers.close(); router.unsubscribeSocket(socket.id); };
     socket.on("disconnect", finishSession);
     const active = () => socket.connected && !ended;
 
@@ -65,7 +64,7 @@ export function registerSdkHandlers(options: {
     };
     const transfers = new TransferSession(socket, service, router, admission, config, reserve, subscribe,
       changes => publishSdkChanges(io, router, socket.id, changes,
-        () => { logger.warn("Changed delivery failed after commit", { event: "ulda:changed" }); }), active);
+        () => { logger.warn("Changed delivery failed after commit", { event: "ulda:changed" }); }), active, lifetime.signal);
 
     for (const action of ["hello", "read", "create", "update", "delete", "session.close", "transfer"]) {
       socket.on("ulda:" + action, (...args: unknown[]) => {
@@ -103,13 +102,15 @@ export function registerSdkHandlers(options: {
           if (action === "read") {
             const ids = parseSdkRead(body);
             await router.runResources(ids, async () => {
-              const releaseRead = reserveRead(ids.length);
+              const releaseRead = await reserveRead(ids.length);
               const release = () => { releaseRead(); releaseSubscriptions(); };
               let releaseSubscriptions = () => {};
               try { releaseSubscriptions = reserve(ids); } catch (error) { releaseRead(); throw error; }
               try {
-                const resources = await service.read(ids);
+                if (!active()) throw new DomainError('not_ready', 'Disconnected read.');
+                const resources = await service.read(ids, SDK_LIMITS.payloadBytes, SDK_LIMITS.messageBytes);
                 checkSdkSize(resources);
+                if (!active()) return;
                 subscribe(ids);
                 reply({ ok: true, data: resources.map(sdkResource) });
               } finally { release(); }
@@ -134,7 +135,7 @@ export function registerSdkHandlers(options: {
             const updateIds = changes.filter(item => item.payload !== undefined).map(item => item.id);
             const release = reserve(updateIds);
             try {
-              const releaseRead = reserveRead(changes.length);
+              const releaseRead = await reserveRead(changes.length);
               try { await service.validate(changes); } finally { releaseRead(); }
               mutationStarted = true;
               await service.storage.applyBatch(changes);

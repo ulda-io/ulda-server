@@ -179,6 +179,7 @@ export function createUldaServer(options: CreateServerOptions): UldaServer {
       readiness.stop();
       admission.connections.stop();
       router.stopAccepting();
+      admission.reads.stop();
       await router.drain();
       await new Promise<void>((resolve) => io.close(() => resolve()));
       if (httpServer.listening) {

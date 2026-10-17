@@ -157,13 +157,30 @@ export class PostgresResourceStorage implements ResourceStorage {
     if (ids.length === 0) return [];
     // Oversized legacy/corrupt rows never transfer large BYTEA values into Node.
     // Bounds are parameters, not string-interpolated SQL; one query/read snapshot.
-    const columns = bounds
-      ? "id, CASE WHEN octet_length(witness) <= $2 AND octet_length(payload) <= $3 THEN witness END AS witness, " +
-        "CASE WHEN octet_length(witness) <= $2 AND octet_length(payload) <= $3 THEN payload END AS payload"
-      : RESOURCE_COLUMNS;
+    // Window aggregates see requested slots, including repeated IDs. One
+    // statement checks lengths and returns bytes from the same MVCC snapshot;
+    // no metadata query whose result could race a later payload read.
+    const aggregate = bounds?.maxTotalBytes !== undefined;
+    const query = aggregate
+      ? `WITH selected AS (
+          SELECT r.id, r.witness, r.payload,
+            bool_and(octet_length(r.witness) <= $2 AND octet_length(r.payload) <= $3) OVER () AS rows_fit,
+            sum(octet_length(r.witness)::bigint + octet_length(r.payload)) OVER () AS total_bytes
+          FROM unnest($1::bigint[]) AS requested(id)
+          JOIN public.ulda_resources r ON r.id = requested.id
+        ) SELECT id,
+          CASE WHEN rows_fit AND ($4::bigint IS NULL OR total_bytes <= $4) THEN witness END AS witness,
+          CASE WHEN rows_fit AND ($4::bigint IS NULL OR total_bytes <= $4) THEN payload END AS payload
+        FROM selected`
+      : bounds
+        ? "SELECT id, CASE WHEN octet_length(witness) <= $2 AND octet_length(payload) <= $3 THEN witness END AS witness, " +
+          "CASE WHEN octet_length(witness) <= $2 AND octet_length(payload) <= $3 THEN payload END AS payload " +
+          "FROM public.ulda_resources WHERE id = ANY($1::bigint[])"
+        : "SELECT " + RESOURCE_COLUMNS + " FROM public.ulda_resources WHERE id = ANY($1::bigint[])";
     const result = await this.#pool.query<ResourceRow>(
-      "SELECT " + columns + " FROM public.ulda_resources WHERE id = ANY($1::bigint[])",
-      bounds ? [ids.map(String), bounds.maxWitnessBytes, bounds.maxPayloadBytes] : [ids.map(String)],
+      query,
+      bounds ? [ids.map(String), bounds.maxWitnessBytes, bounds.maxPayloadBytes,
+        ...(aggregate ? [bounds.maxTotalBytes] : [])] : [ids.map(String)],
     );
     if (result.rows.some(row => row.witness === null || row.payload === null)) {
       throw new DomainError("rate_limited", "Stored row exceeds read bounds.");

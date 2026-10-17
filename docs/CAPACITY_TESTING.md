@@ -100,20 +100,36 @@ is not a key-generation or write-throughput benchmark. Client operations use the
 public SDK entry and verify all returned JSON. Database seeding uses test-only
 internal crypto helpers; no real user data is used.
 
-Each size runs three times in rotated order. Reports contain complete open time,
+Each size runs three times in rotated order. After all clients finish opening,
+a second barrier starts their Refresh calls together. Both phases use the SDK's
+default request timeout. Reports contain complete open/refresh time,
 content-read/decrypt time, limit responses, request counts, errors and generator
-memory. Server cgroup memory peak is cumulative since that variant's container
+memory. Refresh reports distinguish failed calls from clients skipped because
+their initial Connect failed. Server CPU comes from cgroup CPU counters across
+each phase, including barrier/reporting time; it is a window average, not a peak.
+Server cgroup memory peak is cumulative since that variant's container
 started. `MEASURED` means the experiment finished, not that every candidate passed:
 inspect per-run errors and safe error codes. Any recommendation must account for
 concurrent admission pressure and byte bounds, not just the fastest single read.
 Results are host/workload specific; packet counts are not an absolute optimum.
 
-The current server reserves the worst-case payload size for every ID before a
-read. Under concurrent load, `LIMIT` can therefore mean temporary budget pressure,
-even when actual records are small. The SDK splits rejected batches, but a
-single-ID read can still be rejected when that budget is exhausted. Compare
-successful complete opens: lower latency among only the surviving clients does
-not establish that a larger batch performs better.
+The normal batch remains 64 IDs. Larger batches reduce round trips but reserve
+more of the shared read budget per request and can increase queue latency under
+concurrent catalog loading. A candidate with failed clients is not a faster
+successful result. This wire batch size does not cap the number of entries in a
+master catalog; the SDK reads additional batches subject to the documented byte,
+subscription and session limits.
+
+The server reserves the worst-case payload size for every ID before a read.
+Temporary contention uses bounded FIFO admission; a full or expired wait returns
+`not_ready`, not `too_large`. The latter still represents actual size/budget
+incompatibility and can trigger the SDK's splitting fallback. Compare complete
+operations for all clients, including errors, not just surviving clients.
+
+Append `--large-payloads` for a separate three-round regression at batch 64:
+100 clients, 16 contents of nominal 512 KiB each, Connect followed by synchronized
+Refresh. This deliberately exceeds the ordinary aggregate response ceiling and
+checks bounded splitting, decryption and complete local state at normal budgets.
 
 For a separate diagnosis of conservative read reservations, append
 `--diagnose-read-budget`. This runs only batch 64 once per profile, with an

@@ -1,5 +1,6 @@
 import type { AppConfig } from "../config/config.js";
 import { ByteBudget } from "./byte-budget.js";
+import { ReadBudget } from "./read-budget.js";
 import { ConnectionLimit } from "./connection-limit.js";
 
 export class IngressLease {
@@ -48,7 +49,7 @@ export class IngressOwner {
 
 export class ServerAdmission {
   readonly input: ByteBudget;
-  readonly reads: ByteBudget;
+  readonly reads: ReadBudget;
   readonly output: ByteBudget;
   readonly staging: ByteBudget;
   readonly outputPackets = new ByteBudget(65_536);
@@ -61,7 +62,7 @@ export class ServerAdmission {
   pending = 0;
   constructor(readonly limits: AppConfig["limits"]) {
     this.input = new ByteBudget(limits.maxInflightBytes);
-    this.reads = new ByteBudget(limits.maxActiveReadBytes);
+    this.reads = new ReadBudget(limits.maxActiveReadBytes, Math.min(1024, limits.maxQueuedTotal));
     this.output = new ByteBudget(limits.maxBufferedTotalBytes);
     this.staging = new ByteBudget(limits.maxStagedBytes);
     this.connections = new ConnectionLimit(limits.maxConnections);
@@ -73,7 +74,7 @@ export class ServerAdmission {
   snapshot() {
     return { connections: this.connections.count, pending: this.pending,
       inputBytes: this.input.used, inputPeakBytes: this.input.peak,
-      readBytes: this.reads.used, readPeakBytes: this.reads.peak,
+      readBytes: this.reads.used, readPeakBytes: this.reads.peak, waitingReads: this.reads.waiting,
       outputBytes: this.output.used, outputPeakBytes: this.output.peak,
       outputPackets: this.outputPackets.used, stagedBytes: this.staging.used, stagedPeakBytes: this.staging.peak };
   }

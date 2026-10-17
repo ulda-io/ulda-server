@@ -235,6 +235,10 @@ never permission to replay. An interrupted pre-Commit upload cannot itself commi
 Ordinary Read still accepts at most 64 IDs and returns one complete ACK. The SDK
 divides larger catalogs into sequential ID arrays and reduces a group on an
 explicit `too_large` response. The server never streams an unbounded ID array.
+Temporary read-budget contention waits in a bounded server queue. If that wait
+cannot finish, `not_ready` is returned without changing storage; current SDKs
+surface `SERVER_ERROR` and do not split/replay this rejection. See
+[read admission](ADMISSION_LIMITS.md#reads-and-subscriptions).
 For an oversized singleton, Read offset zero pins a bounded ciphertext snapshot;
 subsequent offsets return at most 1 MiB from that same witness/version. Last part,
 expiry or disconnect releases it. New reads after completion may see newer state.
