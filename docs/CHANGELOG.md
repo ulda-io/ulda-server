@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- GitHub checks and a protected Docker Hub release workflow using tested image
+  archives, full vulnerability reports, component inventories and registry checks.
+- Configurable connection-budget guidance distinguishing core verification from
+  complete SDK/database throughput.
+
 - Single-process Socket.IO server compatible with ulda-auth@1.0.1.
 - Opaque PostgreSQL resources, atomic mutation batches, directed witness checks
   and connection-scoped change subscriptions.

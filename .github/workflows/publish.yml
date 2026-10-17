@@ -1,0 +1,64 @@
+name: Release to Docker Hub
+on:
+  push:
+    tags: ['v*.*.*']
+  # A manual rehearsal runs full acceptance but cannot publish.
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: dockerhub-release
+  cancel-in-progress: false
+jobs:
+  checks:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/checks.yml
+    with:
+      release: true
+
+  publish:
+    needs: checks
+    if: github.event_name == 'push' && github.ref_type == 'tag' && vars.ULDA_PUBLISH_REPOSITORY == github.repository && vars.ULDA_DOCKER_PUBLISH_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: dockerhub
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - run: node scripts/ci/release.mjs identity
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: checked-images-${{ github.sha }}
+          path: .local/ci-images
+      - name: Publish exact checked archives; verify fresh registry pulls
+        env:
+          ULDA_MANIFEST_SHA256: ${{ needs.checks.outputs.manifest_sha256 }}
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          ULDA_DOCKER_SERVER: ${{ vars.ULDA_DOCKER_SERVER }}
+          ULDA_DOCKER_POSTGRES: ${{ vars.ULDA_DOCKER_POSTGRES }}
+          ULDA_DOCKER_PROXY: ${{ vars.ULDA_DOCKER_PROXY }}
+          DOCKER_CONFIG: ${{ runner.temp }}/ulda-registry-auth
+        run: node scripts/ci/release.mjs publish
+      - name: Install isolated SDK consumer after registry credentials are removed
+        run: npm ci --prefix test/consumer --ignore-scripts --no-fund
+      - name: Smoke test freshly pulled release with published SDK
+        run: node scripts/ci/release-smoke.mjs
+      - name: Save non-secret registry receipts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: registry-receipts-${{ github.sha }}
+          path: .local/ci-published.json
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30

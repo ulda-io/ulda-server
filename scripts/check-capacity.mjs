@@ -10,6 +10,7 @@ import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { Histogram, loadOptions } from "../test/load/metrics.mjs";
 import { auxiliaryImages } from "../test/support/auxiliary-images.mjs";
+import { httpReady } from "../test/support/http-probe.mjs";
 
 const root=fileURLToPath(new URL("../",import.meta.url));process.chdir(root);
 const options=loadOptions(process.env), requestedImage=process.env.ULDA_TEST_IMAGE;
@@ -28,6 +29,8 @@ const result={status:"RUNNING",startedAt:new Date().toISOString(),options,reques
   cpuQuota:options.profile==="host"?"none for test server/DB":"1 CPU each",memoryLimitBytes:1073741824,
   generator:{node:process.version,platform:process.platform,cpu:os.cpus()[0]?.model,logicalCpus:os.cpus().length,hostRamBytes:os.totalmem()},samples:[]};
 const children=[];let created=false,phase="prepare",statsTimer,statsTask=Promise.resolve();
+const earlyExit = () => { if (result.status === 'RUNNING') console.error(`FAIL capacity runtime stopped during ${phase}; no acceptance result.`); };
+process.on('beforeExit', earlyExit);
 async function run(file,args,overrides={}) {
   try {const {stdout}=await promisify(execFile)(file,args,{cwd:root,env,timeout:180000,maxBuffer:8*1024*1024,windowsHide:true,...overrides});return stdout.trim();}
   catch {throw new Error("Capacity command failed; private diagnostics suppressed.");}
@@ -44,12 +47,13 @@ async function main(){
   result.consumerLockSha256=createHash("sha256").update(fs.readFileSync("test/consumer/package-lock.json")).digest("hex");
   result.docker=JSON.parse(await docker("info","--format",'{"cpus":{{.NCPU}},"memoryBytes":{{.MemTotal}}}'));
   await run(process.execPath,["scripts/create-local-secrets.mjs"]);
-  created=true;await dc("up","-d","--no-build","postgres");await until(async()=>await sql("SELECT 1")==="1");
+  phase="database-start";created=true;await dc("up","-d","--no-build","postgres");await until(async()=>await sql("SELECT 1")==="1");
+  phase="database-roles";
   await dc("run","--rm","--no-deps","-e","ULDA_DB_SETUP=1","db-setup");
-  await dc("run","--rm","--no-deps","migrate");
-  await dc("up","-d","--no-build","server");
+  phase="database-migration";await dc("run","--rm","--no-deps","migrate");
+  phase="server-start";await dc("up","-d","--no-build","server");
   const port=await dc("port","server","3000"),url="http://127.0.0.1:"+port.split(":").at(-1);
-  await until(async()=>{const response=await fetch(url+"/ready",{signal:AbortSignal.timeout(3000)});await response.arrayBuffer();return response.status===200;});
+  phase="server-readiness";await until(()=>httpReady(url));
   const app=await dc("ps","--quiet","server"),db=await dc("ps","--quiet","postgres");
   result.containers={serverImage:await docker("inspect",app,"--format","{{.Image}}"),databaseImage:await docker("inspect",db,"--format","{{.Image}}")};
   for(const cid of [app,db]){
@@ -101,7 +105,7 @@ async function main(){
   assert.equal(result.measurement.attempted,result.measurement.confirmed);assert.equal(result.measurement.verifiedClients,options.clients);
   assert.equal(result.measurement.authorEchoes,0);assert.equal(result.measurement.failed,0);assert.equal(result.measurement.asyncErrors,0);
   assert.equal(Number(await sql("SELECT count(*) FROM public.ulda_resources")),options.clients*2);
-  phase="recovery";await until(async()=>{const r=await fetch(url+"/ready",{signal:AbortSignal.timeout(3000)});await r.arrayBuffer();return r.status===200;});
+  phase="recovery";await until(()=>httpReady(url));
   const logs=await dc("logs","--no-color","server","postgres");
   for(const name of fs.readdirSync(env.ULDA_SECRETS_DIR))assert(!logs.includes(fs.readFileSync(path.join(env.ULDA_SECRETS_DIR,name),"utf8").trim()));
   assert(!logs.includes("synthetic-capacity-"));

@@ -16,6 +16,8 @@ private SDK implementation is required. The SDK is not a server runtime dependen
 ```powershell
 npm run check
 npm run test:tools
+npm run test:ci
+npm run audit:source
 ```
 
 The first command runs TypeScript checks, unit/Socket.IO tests and the production
@@ -63,15 +65,14 @@ in test fixtures, reports or public logs.
 
 The unit and integration suites are correctness checks, not throughput benchmarks.
 Release acceptance also requires sustained load against the final image and a
-specified database/CPU/memory/TLS configuration. The target baseline is 100
-connections, 200 updates per second on independent resources with about 1 KiB of
-JSON, for 30 minutes, with p95 at most one second and no unexpected errors.
-Count scheduled work, confirmed operations and generator drops separately; also
-observe memory, queues, slow receivers and recovery after overload.
+specified database/CPU/memory/TLS configuration. The release workflow uses 100
+connections and independent resources with about 1 KiB of JSON for 30 minutes,
+without a target update rate. It requires no unexpected or uncertain writes and
+checks all final states. Inspect the latency and resource results before approval;
+shared CI runner throughput is not a production capacity guarantee.
 
-This target is an acceptance criterion, not a published measurement or a universal
-capacity guarantee. Historical benchmark applications and machine-specific results
-are not included in this source distribution. The [capacity runner](CAPACITY_TESTING.md)
-measures 100 independent connections without a fixed update rate, on a disposable
-stack. This closed-loop measurement and a fixed-rate acceptance run answer different
-questions; do not substitute either a unit test or a short peak for a sustained run.
+Historical benchmark applications and machine-specific results are not included
+in this source distribution. The [capacity runner](CAPACITY_TESTING.md) uses a
+disposable stack. A separate fixed-arrival-rate experiment is needed to establish
+an SLA such as 200 updates/s with p95 at most one second; closed-loop saturation
+does not prove it. See the [release procedure](RELEASING.md).

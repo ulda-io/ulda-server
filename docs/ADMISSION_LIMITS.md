@@ -38,6 +38,20 @@ Engine.IO handshake and Socket.IO CONNECT waits are bounded at 10 seconds.
 [Wire size limits](SDK_PROTOCOL.md#limits-and-profiles) remain fixed when
 operational budgets are raised.
 
+`MAX_CONNECTIONS=1000` is a configurable admission budget, not a single-process
+capacity ceiling. The accepted configuration range is 1–100000; that range is
+not a promise that a machine can sustain that many connections. Compose forwards
+this variable, so an operator can raise it in `.env` and recreate the server.
+Keep memory, subscriptions, pending work and edge limits consistent with the new
+budget, and measure the intended workload before increasing it in production.
+
+Connection count and updates per second are different measurements. Idle sockets
+cost memory and heartbeat work; active sockets also consume verification, SQL,
+serialization and notification capacity. A core-only `verify` benchmark or an
+in-memory adapter benchmark does not measure a complete encrypted SDK update
+persisted in PostgreSQL. The supplied capacity test uses 100 active connections;
+it does not certify the maximum supported connection count.
+
 ## Input ownership
 
 1. Before header decoding, reserve 1024 bytes per packet plus four times the

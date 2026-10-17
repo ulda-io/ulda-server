@@ -20,6 +20,9 @@
 
 ## Develop and verify
 
+- [Releasing](RELEASING.md): GitHub checks, Docker Hub setup, artifact verification
+  and the manually approved release process.
+
 - [Capacity measurement](CAPACITY_TESTING.md): 100 SDK connections without a target
   update rate; disposable stack, latency, resource use and final-state verification.
 
