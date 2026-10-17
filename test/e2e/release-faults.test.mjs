@@ -187,5 +187,5 @@ test('process exits after PostgreSQL commit and before ACK or Changed; restart r
  await a.ulda.reconnect();await b.ulda.reconnect();assert.equal(a.ulda.value('item').value,2);assert.equal(b.ulda.value('item').value,2);
  assert.deepEqual(await rows([master,id]),committed);
  second.child.send({type:'counts'});await until(()=>second.messages.some(m=>m.type==='counts'));assert.equal(second.messages.find(m=>m.type==='counts').writes,0);
- saveResult('process-crash.json',{success:true,exitCode:0,scenario:'real process exit after COMMIT before ACK/Changed',sdkVersion:'1.0.1',privateDiagnosticsSuppressed:true});
+ saveResult('process-crash.json',{success:true,exitCode:0,scenario:'real process exit after COMMIT before ACK/Changed',sdkVersion:'1.1.0',privateDiagnosticsSuppressed:true});
 });

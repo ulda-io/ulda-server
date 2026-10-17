@@ -2,7 +2,8 @@
 
 ## 1.0.0
 
-- Required CI acceptance for the reviewed ULDA Auth 1.1.0 archive: 65 public creates, a 10,000-content catalog and staged complete deletion against the application container and PostgreSQL. Capacity uses the same archive; published 1.0.1 compatibility remains covered.
+- Pin the isolated published SDK consumer to ULDA Auth 1.1.0 for lifecycle/fault, deployment and external-database checks. The SDK remains a test-only dependency.
+- Required CI acceptance for the reviewed ULDA Auth 1.1.0 archive: 65 public creates, a 10,000-content catalog and staged complete deletion against the application container and PostgreSQL. Capacity uses the same archive.
 - Document combined catalog, subscription, Router, staging and outbound budgets.
 
 - Bounded FIFO admission for concurrent reads and mutation validation without
@@ -31,7 +32,7 @@
 - Configurable connection-budget guidance distinguishing core verification from
   complete SDK/database throughput.
 
-- Single-process Socket.IO server compatible with ulda-auth@1.0.1.
+- Single-process Socket.IO server compatible with ulda-auth@1.1.0.
 - Opaque PostgreSQL resources, atomic mutation batches, directed witness checks
   and connection-scoped change subscriptions.
 - Bounded admission, safe diagnostics, database role separation and container

@@ -1,7 +1,7 @@
 # SDK wire protocol
 
 The default server implements the binary `ulda:*` contract used by
-`ulda-auth@1.0.1` and the large-operation extension for newer clients. Socket.IO uses the root namespace and `/socket.io/` path.
+`ulda-auth@1.1.0`, including its large-operation extension. Socket.IO uses the root namespace and `/socket.io/` path.
 The configured protocol identifier `1.0` is not a server release number and
 is not repeated in every command.
 

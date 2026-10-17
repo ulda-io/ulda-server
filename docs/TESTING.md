@@ -8,7 +8,7 @@ npm ci --prefix test/consumer --ignore-scripts
 ```
 
 The server and the SDK consumer have separate dependencies. The consumer pins
-ulda-auth@1.0.1 from npm and imports its public exports; no adjacent checkout or
+ulda-auth@1.1.0 from npm and imports its public exports; no adjacent checkout or
 private SDK implementation is required. The SDK is not a server runtime dependency.
 
 ## Local checks
@@ -79,4 +79,4 @@ does not prove it. See the [release procedure](RELEASING.md).
 
 ## Large-catalog release regression
 
-The required image job installs a digest-pinned ULDA Auth 1.1.0 candidate archive and runs `npm run test:large-catalog` against the real application container and an isolated PostgreSQL fixture. It retains the published SDK 1.0.1 compatibility suite separately. See [candidate scenarios and reproduction](PUBLISHED_SDK_TESTS.md#large-catalog-candidate-acceptance).
+The required image job installs the digest-pinned ULDA Auth 1.1.0 archive and runs `npm run test:large-catalog` against the real application container and an isolated PostgreSQL fixture. Registry integration separately installs published SDK 1.1.0 through its committed lockfile. See [large-catalog scenarios and reproduction](PUBLISHED_SDK_TESTS.md#large-catalog-candidate-acceptance).

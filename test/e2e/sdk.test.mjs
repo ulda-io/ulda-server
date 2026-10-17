@@ -184,11 +184,29 @@ test("actual PostgreSQL commit ambiguity never produces a negative ACK or replay
 });
 
 
-test("published SDK sees subscription refusal before Create changes PostgreSQL", async t => {
+test("published SDK cannot bypass subscription refusal through a transfer and reconnects without replay", async t => {
   const { server, client } = await setup(t, { MAX_SUBSCRIPTIONS_PER_SOCKET: "1" }), a = client();
   await a.sdk.register(password);
   const before = await pool.query("SELECT id,witness,payload FROM public.ulda_resources ORDER BY id");
+  const local = a.sdk.snapshot();
+  let creates = 0;
+  const create = server.storage.createBatch.bind(server.storage);
+  server.storage.createBatch = async items => { creates++; return create(items); };
+  a.trace.length = 0;
   await assert.rejects(a.sdk.add(privateName, { n: 1 }), { code: "LIMIT" });
+  assert.deepEqual((await pool.query("SELECT id,witness,payload FROM public.ulda_resources ORDER BY id")).rows, before.rows);
+  assert.deepEqual(a.sdk.snapshot(), local);
+  assert.equal(creates, 0);
+  // A confirmed too_large rejection permits one staged fallback in SDK 1.1.0.
+  // Rejection of its commit closes the transport to discard uncommitted staging.
+  const sent = () => a.trace.filter(e => e.phase === "send").map(e => e.event + (e.step ? ":" + e.step : ""));
+  assert.deepEqual(sent(), ["ulda:create", "ulda:transfer:begin", "ulda:transfer:append", "ulda:transfer:commit"]);
+  assert.equal(a.transport.connected, false);
+  await until(() => server.router.subscriptionTotal === 0 && server.admission.staging.used === 0 && server.admission.input.used === 0);
+  await a.sdk.reconnect();
+  assert.deepEqual(a.sdk.snapshot(), local);
+  assert.deepEqual(sent().slice(4), ["ulda:hello", "ulda:read"]);
+  assert.equal(creates, 0);
   assert.deepEqual((await pool.query("SELECT id,witness,payload FROM public.ulda_resources ORDER BY id")).rows, before.rows);
   assert.equal(server.router.subscriptionTotal, 1);
 });

@@ -26,7 +26,7 @@ delete env.ULDA_CAPACITY_SDK_ROOT;
 delete env.TRANSFER_TIMEOUT_MS;
 const overlay=path.join(folder,"capacity.json");
 fs.writeFileSync(overlay,JSON.stringify({services:{server:{cpus:options.profile==="host"?0:1,environment:{LOG_LEVEL:"error"}},postgres:{cpus:options.profile==="host"?0:1}}}));
-const result={status:"RUNNING",startedAt:new Date().toISOString(),options,requestedImage,sdk:"ulda-auth@1.0.1",
+const result={status:"RUNNING",startedAt:new Date().toISOString(),options,requestedImage,sdk:"ulda-auth@1.1.0",
   protocol:"HTTP/WebSocket loopback, no TLS proxy",mode:"X",workload:"independent encrypted SDK content updates",
   cpuQuota:options.profile==="host"?"none for test server/DB":"1 CPU each",memoryLimitBytes:1073741824,
   generator:{node:process.version,platform:process.platform,cpu:os.cpus()[0]?.model,logicalCpus:os.cpus().length,hostRamBytes:os.totalmem()},samples:[]};
@@ -57,7 +57,7 @@ async function main(){
     const manifest = JSON.parse(fs.readFileSync(path.join(consumer, 'node_modules/ulda-auth/package.json')));
     assert.equal(manifest.name, 'ulda-auth');
     result.sdk = manifest.name + '@' + manifest.version;
-    result.sdkSource = 'explicit local candidate archive, not the published version';
+    result.sdkSource = 'explicit local archive, not a registry installation';
     env.ULDA_CAPACITY_SDK_ROOT = consumer;
     result.candidateConsumerLockSha256 = createHash('sha256').update(fs.readFileSync(path.join(consumer, 'package-lock.json'))).digest('hex');
   }

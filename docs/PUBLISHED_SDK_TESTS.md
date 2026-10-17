@@ -10,7 +10,7 @@ npm ci --prefix test/consumer --ignore-scripts
 npm run test:integration
 ```
 
-`test/consumer/package.json` pins `ulda-auth@1.0.1`; its separate lockfile pins
+`test/consumer/package.json` pins `ulda-auth@1.1.0`; its separate lockfile pins
 transitive dependencies and npm archive integrity. Only this test consumer
 installs the client SDK. The server's production dependencies, crypto boundary
 and runtime image do not gain SDK code. A missing consumer fails explicitly;
@@ -69,6 +69,8 @@ it is not used for payloads, passwords, witnesses or origins.
   writes progressing, no partial publication of bad Read/Changed arrays.
 - Late invalid members, subscription and input limits before mutation, cleanup
   of connection/subscription/reservation state.
+- Subscription refusal through both ordinary Create and the SDK's staged fallback;
+  no storage Create, unchanged local data, staging cleanup and reconnect without replay.
 - Lost Create/Update/recovery ACK, uncertain COMMIT, bounded reconnect without
   mutation replay and a real process exit after COMMIT before ACK/Changed.
 - PostgreSQL rollback/connection/timeout tests; identical persisted encrypted
@@ -86,7 +88,7 @@ drill. See [Testing](TESTING.md) for commands and the limits of each suite.
 
 ## Large-catalog candidate acceptance
 
-Run `npm run test:large-catalog` with an explicit `ULDA_TEST_IMAGE` and `ULDA_TEST_SDK_TARBALL`. The archive must match the version and SHA-256 in `test/consumer-candidate.json`; there is no fallback to the old published SDK. `ULDA_TEST_POSTGRES_IMAGE` optionally selects an existing local database fixture. Otherwise the runner builds the repository fixture.
+Run `npm run test:large-catalog` with an explicit `ULDA_TEST_IMAGE` and `ULDA_TEST_SDK_TARBALL`. The archive must match the version and SHA-256 in `test/consumer-candidate.json`; there is no fallback to a different installed SDK. `ULDA_TEST_POSTGRES_IMAGE` optionally selects an existing local database fixture. Otherwise the runner builds the repository fixture.
 
 The runner installs the archive with lifecycle scripts disabled into a fresh ignored consumer. It uses labelled disposable Docker resources, loopback-only ports and random database credentials. The application runs in the actual container. All lifecycle calls use the installed public SDK export. Fixture generation alone uses private crypto helpers from that installed archive to seed 10,000 separately encrypted contents efficiently. It does not import another local source checkout.
 
@@ -101,4 +103,4 @@ Required scenarios:
 
 The timeout is explicitly 60 seconds per SDK await for this correctness test. It does not prove the default 10-second timeout suits all catalog sizes or hardware. Summaries under `.local/large-catalog-*` contain counts, timings and artifact identities, never passwords, origins, plaintext bodies or raw exception diagnostics. Admission and transaction fault cases remain covered by the server's unit and PostgreSQL suites.
 
-CI builds the candidate from a pinned public commit and requires its reviewed archive digest. The image export gate checks the fresh large-catalog receipt, the application/database image IDs, all required phases and successful cleanup. Capacity acceptance must use that same SDK archive. A green old-SDK compatibility test alone cannot authorize export.
+CI builds the archive from a pinned public commit and requires its reviewed digest. That pin currently identifies the released SDK 1.1.0 archive. Registry integration separately installs the published version through `test/consumer/package-lock.json`. The image export gate checks the fresh large-catalog receipt, the application/database image IDs, all required phases and successful cleanup. Capacity acceptance must use that same reviewed archive. Passing registry integration alone cannot authorize export.

@@ -37,7 +37,7 @@ To test a locally prepared SDK candidate instead of the pinned published
 consumer, explicitly set `ULDA_TEST_SDK_TARBALL` to its local `.tgz` path before
 running the command above. The runner installs it with lifecycle scripts disabled
 in a new isolated consumer. Its report records archive SHA-256, installed package
-version, consumer lock hash and the fact that it is an unpublished candidate.
+version, consumer lock hash and the fact that it was installed from a local archive.
 No source-directory substitution occurs. Without this option, the pinned registry
 consumer remains the default. The same-version label alone does not identify a
 candidate; use the archive hash. This option never publishes a package.
@@ -48,7 +48,7 @@ queue, command-rate and output safeguards. The Docker VM's CPU/RAM allocation
 and competing host processes still apply. `compose` preserves one CPU per service.
 No production settings are changed by either profile.
 
-The public `ulda-auth@1.0.1` consumer uses its default cryptographic settings,
+The public `ulda-auth@1.1.0` consumer uses its default cryptographic settings,
 mode X and synthetic JSON of approximately 1 KiB. Password derivation and resource
 creation occur before measurement. Registration performance, fanout to many
 readers, contention on one resource, larger payloads and TLS/WAN overhead require

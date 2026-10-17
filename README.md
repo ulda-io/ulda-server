@@ -70,7 +70,7 @@ to test encrypted transport; it is not part of the standard deployment.
 Install the SDK in the client application:
 
 ```sh
-npm install ulda-auth@1.0.1
+npm install ulda-auth@1.1.0
 ```
 
 ```js
@@ -103,7 +103,7 @@ The SDK runs on the client and is not a server runtime dependency.
 Large-catalog clients can read bounded ID batches and upload large encrypted
 operations in parts before one atomic commit. The server never stores a master
 or content role. The [transfer extension](docs/SDK_PROTOCOL.md#large-operation-extension)
-requires a capable SDK; the published 1.0.1 SDK retains its original limits.
+is supported by `ulda-auth@1.1.0`; older clients retain their original limits.
 Per-frame limits and configurable byte/subscription/queue budgets still apply.
 
 - Create, Read and Update subscribe the live connection before its success ACK.

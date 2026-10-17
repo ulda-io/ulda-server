@@ -21,7 +21,7 @@ fs.mkdirSync(folder, { recursive: true });
 const env = { ...process.env, POSTGRES_USER: "ulda_test", POSTGRES_DB: `ulda_test_${id}`,
   POSTGRES_PASSWORD: randomUUID(), ULDA_TEST_ALLOW_RESET: "1", ULDA_TEST_RESULTS_DIR: folder };
 delete env.DATABASE_URL; delete env.ULDA_TEST_DATABASE_URL; delete env.ULDA_SDK_CONSUMER;
-const result = { status: "RUNNING", sdk: "ulda-auth@1.0.1", checks: [], image, platform: process.platform, node: process.version };
+const result = { status: "RUNNING", sdk: "ulda-auth@1.1.0", checks: [], image, platform: process.platform, node: process.version };
 let phase = "prerequisites", networkCreated = false;
 async function run(file, args, { timeout = 180000, safeOutput = false, includeStderr = false } = {}) {
   try {
@@ -51,7 +51,7 @@ async function appReady() {
 async function main() {
   assert.ok(process.env.npm_execpath, "Invoke through npm run test:integration.");
   const consumer = await import("../test/consumer/index.mjs");
-  assert.equal(consumer.sdkIdentity.version, "1.0.1");
+  assert.equal(consumer.sdkIdentity.version, "1.1.0");
   result.consumerLockSha256 = createHash("sha256").update(fs.readFileSync("test/consumer/package-lock.json")).digest("hex");
   result.sdkIntegrity = JSON.parse(fs.readFileSync("test/consumer/package-lock.json")).packages["node_modules/ulda-auth"].integrity;
   passed("isolated published SDK import");

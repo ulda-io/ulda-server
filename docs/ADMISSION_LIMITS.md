@@ -188,10 +188,17 @@ rejected it before SQL. The client cannot infer definite failure without a reply
 There is no automatic mutation replay. Read after reconnect reconciles known IDs;
 a lost Create ACK cannot recover the generated ID.
 
-Published `ulda-auth@1.0.1` and the large-catalog candidate map `not_ready` to the
-fixed `SERVER_ERROR` code. They do not split or retry it. Successful queued reads
+Published `ulda-auth@1.1.0` maps `not_ready` to the
+fixed `SERVER_ERROR` code. It does not split or retry it. Successful queued reads
 use the existing ACK format and need no client changes. Only a confirmed
-`too_large` read can trigger the candidate's size fallback.
+`too_large` read can trigger the SDK's size fallback.
+
+For writes, SDK 1.1.0 can try one staged transfer after a confirmed `too_large`
+rejection, including a subscription-capacity refusal. The staged commit applies
+the same subscription limits before any database write. If it is rejected, the
+SDK disconnects to discard uncommitted staging; the server releases subscriptions
+and reservations. Reconnect restores subscriptions through Read without replaying
+the rejected write. An unknown write outcome does not permit this fallback.
 
 ## Observation and deployment
 

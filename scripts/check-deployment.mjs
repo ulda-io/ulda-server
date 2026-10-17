@@ -22,7 +22,7 @@ const env={...process.env,POSTGRES_USER:"ulda_test_admin",POSTGRES_DB:"ulda_test
  CORS_ORIGINS:"https://application.example",ULDA_TEST_ALLOW_RESET:"1",ULDA_SMOKE_STATE_FILE:path.join(folder,"state.json")};
 delete env.PGPASSWORD;delete env.PGPASSWORD_FILE;delete env.DATABASE_URL;delete env.ULDA_TEST_DATABASE_URL;
 env.NODE_EXTRA_CA_CERTS=env.ULDA_TLS_CERT_FILE;
-const results={status:"RUNNING",checks:[],image,sdk:"ulda-auth@1.0.1",node:process.version};
+const results={status:"RUNNING",checks:[],image,sdk:"ulda-auth@1.1.0",node:process.version};
 const projects=new Set();let phase="prepare";
 async function run(file,args,options={}) {
  try {const r=await promisify(execFile)(file,args,{cwd:root,env,timeout:180000,maxBuffer:8*1024*1024,windowsHide:true,...options});return (r.stdout+(options.includeStderr?r.stderr:"")).trim();}

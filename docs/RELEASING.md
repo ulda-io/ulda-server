@@ -16,7 +16,7 @@ those database/proxy images for production.
 `Server CI` runs on branch pushes and pull requests. It checks the publication
 tree, complete fetched Git history with Gitleaks, workflow syntax with actionlint,
 Node 22/24 on Linux/Windows, production npm advisories, and Linux container tests
-using the published compatibility SDK and the pinned 1.1.0 candidate archive. Test credentials belong to disposable databases. No
+using the published SDK 1.1.0 and its pinned reviewed archive. Test credentials belong to disposable databases. No
 registry write credentials are available to these jobs.
 
 The image job builds the application and local test fixtures once. Required
@@ -37,7 +37,8 @@ consumer. The required large-catalog test covers 65 public content creations and
 a seeded 10,000-content catalog, including two clients, fragmented ciphertext,
 Changed, Refresh, deletion and complete staged deletion. Seeding is not a benchmark
 of 10,000 sequential `add()` calls. Both short and release capacity tests use this
-same archive. The published 1.0.1 consumer remains a separate compatibility check.
+same archive. A separate consumer installs published 1.1.0 from npm using its
+committed lockfile for integration, deployment and external-database checks.
 See [SDK integration](PUBLISHED_SDK_TESTS.md).
 
 The pinned SDK commit must be reachable in `ulda-io/ulda-auth` before server CI can
