@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Application-only Docker Hub releases, with separately maintained databases
+  and proxies; test-fixture CVE reports are advisory and remain visible.
+- External-PostgreSQL Compose recipe and required published-SDK smoke before
+  publication, using the same application image and restricted database roles.
+- Storage adapter contract and deployment maintenance boundaries.
+
 - GitHub checks and a protected Docker Hub release workflow using tested image
   archives, full vulnerability reports, component inventories and registry checks.
 - Configurable connection-budget guidance distinguishing core verification from

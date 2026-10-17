@@ -24,7 +24,6 @@ if (process.argv[2] === 'identity') {
   assert.equal(manifest.releaseAcceptance, true, 'Release acceptance was not performed');
   assert(manifest.capacity.seconds >= 1800 && manifest.capacity.clients === 100);
   const repos = Object.fromEntries(names.map(name => [name, repositoryName(process.env[`ULDA_DOCKER_${name.toUpperCase()}`])]));
-  assert.equal(new Set(Object.values(repos)).size, 3, 'Use separate repositories for the three images');
   const request = async url => fetch(url, { signal: AbortSignal.timeout(30000) });
   async function registryManifest(repository, tag) {
     const tokenResponse = await request('https://auth.docker.io/token?service=registry.docker.io&scope=' + encodeURIComponent(`repository:${repository}:pull`));
@@ -44,7 +43,7 @@ if (process.argv[2] === 'identity') {
     const body = await existing.json();
     assert(body.errors?.some(e => ['MANIFEST_UNKNOWN', 'NAME_UNKNOWN'].includes(e.code)), 'Unexpected registry response');
   }
-  const receipt = { schema: 1, commit, version, platform: manifest.platform, images: {}, smoke: 'PENDING' };
+  const receipt = { schema: 2, commit, version, platform: manifest.platform, images: {}, externalDatabase: manifest.externalDatabase, smoke: 'PENDING' };
   const config = path.resolve(process.env.DOCKER_CONFIG ?? '');
   assert.equal(config, path.resolve(process.env.RUNNER_TEMP, 'ulda-registry-auth'));
   assert(!fs.existsSync(config), 'Registry credential directory must be fresh');

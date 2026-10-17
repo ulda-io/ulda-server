@@ -4,7 +4,9 @@
 
 | Document | Contents |
 | --- | --- |
-| [Project README](../README.md) | Local Docker setup and client SDK example |
+| [Project README](../README.md) | Deployment scope, local Docker setup and client SDK example |
+| [Operator-managed database](EXTERNAL_DATABASE.md) | Application-only image, external PostgreSQL and maintenance responsibilities |
+| [Storage adapters](STORAGE_ADAPTERS.md) | Adapter contract, custom backends and future language ports |
 | [Manifest](../MANIFEST.md) | Architecture, pipelines and guarantees |
 | [SDK protocol](SDK_PROTOCOL.md) | Exact events, binary fields, ACKs and errors |
 | [Socket boundaries](SOCKET_BOUNDARIES.md) | Ordering, failure handling and reservation ownership |

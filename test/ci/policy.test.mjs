@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { evaluateVulnerabilities, validateCapacity, validateIdentity, validateManifest, repositoryName, imageContentIdentity } from '../../scripts/ci/policy.mjs';
+import { names, externalPostgresImage, evaluateVulnerabilities, validateCapacity, validateIdentity, validateManifest, repositoryName, imageContentIdentity } from '../../scripts/ci/policy.mjs';
 
 const image = 'sha256:' + 'a'.repeat(64), commit = 'b'.repeat(40);
 const report = vulnerabilities => ({ SchemaVersion: 2, Metadata: { ImageID: image, OS: { Family: 'alpine', Name: '3.24' } }, Results: [{ Packages: [{ Name: 'synthetic', Version: '1' }], Vulnerabilities: vulnerabilities }] });
@@ -29,12 +29,23 @@ test('release identity rejects branch push, version mismatch and unsafe names', 
   for (const bad of ['', '-bad/name', 'host.example/org/repo', 'org/name:latest', 'org/../name']) assert.throws(() => repositoryName(bad));
   assert.equal(repositoryName('example/server'), 'example/server');
 });
-test('manifest rejects different source commit, archive traversal and missing images', () => {
-  const manifest = { schema: 1, commit, platform: 'linux/amd64', version: '1.0.0', images: Object.fromEntries(['server', 'postgres', 'proxy'].map(name => [name, { tag: `ulda-ci/${name}:candidate`, id: image, configId: image, contentIdentity: 'c'.repeat(64), archive: `${name}.tar`, sha256: 'c'.repeat(64) }])) };
+test('manifest admits only the application archive and binds independent database acceptance', () => {
+  assert.deepEqual(names, ['server']);
+  const manifest = { schema: 2, commit, platform: 'linux/amd64', version: '1.0.0',
+    images: { server: { tag: 'ulda-ci/server:candidate', id: image, configId: image, contentIdentity: 'c'.repeat(64), archive: 'server.tar', sha256: 'c'.repeat(64) } },
+    testFixtures: Object.fromEntries(['postgres', 'proxy'].map(name => [name, { tag: `ulda-ci/${name}:candidate`, id: image }])),
+    externalDatabase: { reference: externalPostgresImage, contentIdentity: 'd'.repeat(64) }, checks: ['integration', 'deployment', 'capacity', 'external-postgres'] };
   validateManifest(manifest, commit);
   assert.throws(() => validateManifest(manifest, 'd'.repeat(40)));
-  const bad = structuredClone(manifest); bad.images.server.archive = '../private'; assert.throws(() => validateManifest(bad, commit));
-  delete bad.images.proxy; assert.throws(() => validateManifest(bad, commit));
+  for (const mutate of [m => m.images.server.archive = '../private', m => delete m.images.server,
+    m => m.images.postgres = { ...m.images.server, archive: 'postgres.tar' },
+    m => m.images.proxy = { ...m.images.server, archive: 'proxy.tar' }, m => m.schema = 1,
+    m => delete m.testFixtures.postgres, m => m.testFixtures.postgres.archive = 'postgres.tar',
+    m => m.externalDatabase.reference = 'postgres:latest', m => m.externalDatabase.contentIdentity = 'wrong',
+    m => m.checks = ['integration', 'deployment', 'capacity'], m => m.checks = 'external-postgres',
+    m => m.checks = ['external-postgres']]) {
+    const bad = structuredClone(manifest); mutate(bad); assert.throws(() => validateManifest(bad, commit));
+  }
   assert.throws(() => validateManifest({ ...manifest, sourceClean: false, releaseAcceptance: true }, commit));
 });
 test('portable image identity binds layers and runtime config, independent of Docker local ID', () => {
@@ -57,8 +68,13 @@ test('workflow publication depends on required checks and never runs in manual r
   assert.match(publish, /github.event_name == 'push' && github.ref_type == 'tag'/);
   assert.match(publish, /environment: dockerhub/);
   assert(!publish.includes('continue-on-error'));
+  assert(!publish.includes('ULDA_DOCKER_POSTGRES'));
+  assert(!publish.includes('ULDA_DOCKER_PROXY'));
   const checks = fs.readFileSync('.github/workflows/checks.yml', 'utf8');
   assert.match(checks, /needs: \[source, unit, images, image-security\]/);
   assert.match(checks, /test "\$SECURITY" = success/);
   assert(!checks.includes('secrets.'));
+  const securityJob = checks.split('  image-security:')[1].split('  required:')[0];
+  assert(!securityJob.includes('continue-on-error'));
+  assert.match(checks, /release-smoke\.mjs --candidate/);
 });

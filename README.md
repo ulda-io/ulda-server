@@ -13,7 +13,22 @@ One Node.js application process owns the resource queues and subscriptions.
 Independent resources can progress asynchronously; run exactly one server writer
 against a database. PostgreSQL is a separate service.
 
-## Start with Docker Compose
+## Deploy the server
+
+The Docker Hub release contains only the application image, including its
+PostgreSQL adapter and migration tools. Operators provision and maintain their
+own PostgreSQL service and HTTPS/WSS endpoint. Database and proxy images are not
+part of this release. See [operator-managed PostgreSQL](docs/EXTERNAL_DATABASE.md)
+for the application-only Compose setup and maintenance responsibilities.
+
+PostgreSQL is the built-in persistent backend. Other databases require a
+[storage adapter](docs/STORAGE_ADAPTERS.md), not just a different connection URL.
+
+## Local development with Docker Compose
+
+The following stack is a disposable development/test example. Its custom
+PostgreSQL and Nginx images have separate [security assessments](docs/POSTGRES_SECURITY_REVIEW.md)
+and are not certified production dependencies of the server release.
 
 Requirements: Docker with Linux containers, Docker Compose, Node.js 22+ for the
 local password generator, and a free local port (3000 by default). The optional

@@ -1,5 +1,12 @@
 # PostgreSQL image security assessment
 
+Scope: this is the retained assessment of the repository's **test fixture**,
+not the ULDA Server release image. The server-only release no longer distributes
+this PostgreSQL image. Its unresolved CVEs have not been fixed or waived; they
+remain findings for anyone choosing to deploy that image. The historical
+package assessment below does not provide a production approval. See
+[release boundaries](RELEASING.md) and [operator responsibilities](EXTERNAL_DATABASE.md).
+
 Reviewed on 2026-10-17 for the Linux amd64 image built from the pinned PostgreSQL
 18.6 bookworm base. This is an assessment of this deployment, not a claim that
 PostgreSQL or Debian has no vulnerabilities. Recheck after any package, base,
@@ -22,8 +29,9 @@ official package inventory and installed-file list. It applies only to the
 PostgreSQL artifact whose identity was already verified, and expires on
 2026-11-17. A changed version, missing evidence, reported fixed version, or a
 MiniZip package in the inventory disables it. The full finding remains in the
-Trivy report and raw severity counts, and is listed in `notAffected` in the gate
-report. It is not a wildcard ignore rule.
+Trivy report and raw severity counts. The assessment helper retains its expiry
+and tests for any future auxiliary-image review; the application-only release
+does not use this PostgreSQL exception. It is not a wildcard ignore rule.
 
 **CVE-2026-6653 — libxml2 use-after-free.**
 Debian still marks `2.9.14+dfsg-1.3~deb12u6` affected. Its bookworm fix is
@@ -31,8 +39,9 @@ postponed; the upstream repair is not present in this binary. The vulnerable
 path parses malicious XML. PostgreSQL dynamically links libxml2 and provides
 SQL XML functions. ULDA stores parameters as `bytea` and does not call those
 functions, but that does not remove them from PostgreSQL or protect unrelated
-SQL workloads. This finding remains a release blocker; it is not exempted on
-the basis of encrypted application payloads.
+SQL workloads. This finding would block publication of this PostgreSQL image
+under the former full-stack gate. It is not exempted on the basis of encrypted
+payloads; it is outside the application-only artifact, not a repaired package.
 [Debian advisory](https://security-tracker.debian.org/tracker/CVE-2026-6653),
 [PostgreSQL XML support](https://www.postgresql.org/docs/18/datatype-xml.html).
 
@@ -43,7 +52,7 @@ library to obtain a clean scan. A maintained fixed package, or a separately
 reviewed PostgreSQL build without XML support, needs compatibility, upgrade,
 backup and SDK acceptance before replacing the current artifact.
 
-## Other blocking findings
+## Other findings that blocked the former database-image release
 
 The following assessments describe conditions and remaining work. They are not
 additional CI exemptions. None is marked fixed merely because the ordinary
@@ -59,7 +68,7 @@ patch/advisory references and distribution status.
 | gzip: [CVE-2026-41992](https://security-tracker.debian.org/tracker/CVE-2026-41992) | Crafted LZH input. No resource is passed to gzip by ULDA. Restore/init archives must be trusted; no bookworm fix is currently supplied. |
 | libacl: [CVE-2026-54369](https://security-tracker.debian.org/tracker/CVE-2026-54369) | Symlink-following ACL operations. Do not share writable initialization/backup directories with untrusted users. The upstream repair adds ABI and is not a safe isolated package patch. |
 | LDAP: [CVE-2023-2953](https://security-tracker.debian.org/tracker/CVE-2023-2953) | Allocation-failure handling. LDAP authentication is not configured, but PostgreSQL requires the linked library; it cannot simply be deleted. |
-| Perl: [CVE-2026-9538](https://security-tracker.debian.org/tracker/CVE-2026-9538), [82560](https://security-tracker.debian.org/tracker/CVE-2026-82560) | Crafted Archive::Tar input and Pod::Text resource exhaustion. No resource-to-tar/POD conversion exists. Perl remains a dependency of Debian's PostgreSQL tooling. Unknown severity still blocks CI. |
+| Perl: [CVE-2026-9538](https://security-tracker.debian.org/tracker/CVE-2026-9538), [82560](https://security-tracker.debian.org/tracker/CVE-2026-82560) | Crafted Archive::Tar input and Pod::Text resource exhaustion. No resource-to-tar/POD conversion exists. Perl remains a dependency of Debian's PostgreSQL tooling. Unknown severity blocked the former database artifact gate and still blocks any finding in the application artifact. |
 | OpenSSL: [CVE-2026-84782](https://security-tracker.debian.org/tracker/CVE-2026-84782) | DTLS handshake issue. PostgreSQL does not use DTLS; the optional external HTTPS proxy is a separate image. This is a configuration assessment, not an OpenSSL patch. |
 | systemd: [CVE-2026-16742](https://security-tracker.debian.org/tracker/CVE-2026-16742) | The vulnerable homed service and helper are absent; `libsystemd0` is linked by PostgreSQL. No homed-managed users exist in this deployment. |
 | ncurses: [CVE-2025-69720](https://security-tracker.debian.org/tracker/CVE-2025-69720) | Vendor review describes a CLI-tool crash; affected binaries/ranges still need precise upstream confirmation. Do not declare the whole package safe or silently downgrade scanner severity. |

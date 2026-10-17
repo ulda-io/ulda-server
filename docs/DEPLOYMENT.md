@@ -1,14 +1,17 @@
 # Deployment, database roles and recovery
 
 Run exactly one ULDA Server process against a dedicated PostgreSQL database.
-This guide uses the repository's Compose configuration. Public image publication
-is a separate release step; substitute a reviewed immutable image digest when one
-is available. Docker Compose 2.24.4+ is required by the TLS override.
+For the release deployment, use [operator-managed PostgreSQL](EXTERNAL_DATABASE.md):
+only the application image is published. This document describes the repository's
+local development/test Compose stack and its role/recovery procedures. Its
+database and proxy builds are test fixtures, not production release artifacts.
+Adapt operational procedures to the operator's database and proxy. Docker
+Compose 2.24.4+ is required by the local TLS override.
 
 See the [configuration reference](CONFIGURATION.md) for environment variables
 and the distinction between standalone settings and Compose interpolation.
 
-## New installation
+## New local test installation
 
 For a **new** PostgreSQL volume, from the repository root:
 

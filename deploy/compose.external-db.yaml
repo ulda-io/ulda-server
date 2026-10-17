@@ -1,0 +1,88 @@
+# Application-only deployment. The operator creates and maintains PostgreSQL
+# and this external Docker network. No database or proxy image is built here.
+name: ulda-server
+
+x-application: &application
+  image: "${ULDA_SERVER_IMAGE:?Set ULDA_SERVER_IMAGE to a reviewed application image digest}"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 128
+  networks: [database]
+
+x-database-environment: &database-environment
+  PGHOST: "${PGHOST:?Set PGHOST to the PostgreSQL host or network alias}"
+  PGPORT: "${PGPORT:-5432}"
+  PGDATABASE: "${PGDATABASE:-ulda}"
+  PGPASSWORD_FILE: /run/secrets/db_password
+  DATABASE_POOL_MAX: "10"
+  DATABASE_CONNECTION_TIMEOUT_MS: "5000"
+  DATABASE_STATEMENT_TIMEOUT_MS: "10000"
+  DATABASE_LOCK_TIMEOUT_MS: "5000"
+  DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS: "10000"
+
+services:
+  db-setup:
+    <<: *application
+    profiles: [admin]
+    command: [node, dist/cli/setup-postgres-roles.js]
+    environment:
+      <<: *database-environment
+      PGUSER: "${ULDA_DB_ADMIN_USER:?Set ULDA_DB_ADMIN_USER for explicit role setup}"
+      PGPASSWORD_FILE: /run/secrets/db_admin_password
+      ULDA_MIGRATION_PASSWORD_FILE: /run/secrets/db_migration_password
+      ULDA_RUNTIME_PASSWORD_FILE: /run/secrets/db_runtime_password
+    secrets: [db_admin_password, db_migration_password, db_runtime_password]
+    restart: "no"
+
+  migrate:
+    <<: *application
+    command: [node, dist/cli/migrate-postgres.js]
+    environment:
+      <<: *database-environment
+      NODE_ENV: production
+      PGUSER: ulda_migrator
+      DATABASE_POOL_MAX: "2"
+      MIGRATIONS_DIR: /app/migrations/postgres
+      ULDA_MANAGED_ROLES: "1"
+    secrets:
+      - source: db_migration_password
+        target: db_password
+    restart: "no"
+
+  server:
+    <<: *application
+    init: true
+    mem_limit: 1g
+    cpus: 1.0
+    environment:
+      <<: *database-environment
+      NODE_ENV: production
+      PGUSER: ulda_runtime
+      NODE_OPTIONS: --max-old-space-size=512
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: "3000"
+      CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:3000}"
+    secrets:
+      - source: db_runtime_password
+        target: db_password
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${ULDA_PUBLISH_ADDRESS:-127.0.0.1}:${ULDA_SERVER_PORT:-3000}:3000"
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+networks:
+  database:
+    external: true
+    name: "${ULDA_DATABASE_NETWORK:?Set ULDA_DATABASE_NETWORK to an existing Docker network}"
+
+secrets:
+  db_admin_password:
+    file: "${ULDA_SECRETS_DIR:?Set ULDA_SECRETS_DIR to an absolute secret directory}/postgres_admin_password"
+  db_migration_password:
+    file: "${ULDA_SECRETS_DIR:?Set ULDA_SECRETS_DIR to an absolute secret directory}/postgres_migration_password"
+  db_runtime_password:
+    file: "${ULDA_SECRETS_DIR:?Set ULDA_SECRETS_DIR to an absolute secret directory}/postgres_runtime_password"

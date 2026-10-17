@@ -1,3 +1,5 @@
+# Local development and integration fixture, not the Docker Hub release stack.
+# Production operators manage PostgreSQL/proxy separately; see docs/EXTERNAL_DATABASE.md.
 name: ulda-server
 
 x-ulda-image: &ulda-image

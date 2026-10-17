@@ -45,8 +45,6 @@ jobs:
           DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           ULDA_DOCKER_SERVER: ${{ vars.ULDA_DOCKER_SERVER }}
-          ULDA_DOCKER_POSTGRES: ${{ vars.ULDA_DOCKER_POSTGRES }}
-          ULDA_DOCKER_PROXY: ${{ vars.ULDA_DOCKER_PROXY }}
           DOCKER_CONFIG: ${{ runner.temp }}/ulda-registry-auth
         run: node scripts/ci/release.mjs publish
       - name: Install isolated SDK consumer after registry credentials are removed

@@ -1,4 +1,11 @@
-# PostgreSQL and TLS proxy images
+# PostgreSQL and TLS proxy test images
+
+These builds are retained for local development and integration tests only.
+The release publishes the ULDA Server application image; it does not publish or
+certify these PostgreSQL/Nginx images for production. Operators select and patch
+their own infrastructure. [Application-only deployment](EXTERNAL_DATABASE.md).
+CI retains raw fixture CVE reports separately; a green server gate does not
+resolve these findings or approve a vulnerable database for deployment.
 
 Compose builds three separate images. The client SDK still connects only to the
 application server; PostgreSQL and the proxy do not import `ulda-auth` or decrypt

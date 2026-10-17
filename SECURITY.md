@@ -3,7 +3,16 @@
 ULDA Server stores public witnesses and opaque client payloads, verifies directed
 witness transitions and coordinates one application writer over PostgreSQL.
 This policy covers the official server code, Socket.IO boundary, PostgreSQL
-adapter, migrations and supplied deployment configuration.
+adapter, migrations and supplied deployment configuration. The release contains
+only the application image and its bundled runtime/dependencies. Operators
+maintain database/proxy services, images, patches, network access and backups.
+Defects in our adapter or deployment instructions remain in scope even when
+the database is externally managed. See [deployment ownership](docs/EXTERNAL_DATABASE.md).
+
+Repository PostgreSQL/Nginx builds are local integration fixtures, not published
+production dependencies. Their known CVEs remain visible in separate advisory
+reports. Application image checks still reject High/Critical/unknown findings
+and invalid scan evidence; no database package exception applies to the server.
 
 ## Supported versions
 

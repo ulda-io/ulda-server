@@ -82,15 +82,17 @@ jobs:
       - run: npm ci --ignore-scripts --no-fund
       - run: npm ci --prefix test/consumer --ignore-scripts --no-fund
       - run: npm audit --prefix test/consumer --omit=dev --audit-level=high
-      - name: Build each Linux amd64 image once
+      - name: Build application and separate Linux amd64 test fixtures
         run: node scripts/ci/images.mjs build
       - name: Published SDK, real PostgreSQL and container checks
         run: npm run test:integration
       - name: TLS, privileges, restart and backup restoration
         run: npm run test:deployment
+      - name: Application-only Compose with independently operated PostgreSQL
+        run: node scripts/ci/release-smoke.mjs --candidate
       - name: Closed-loop load and final persisted-state verification
         run: npm run test:capacity
-      - name: Export tested images and a safe acceptance receipt
+      - name: Export only the tested application image and acceptance receipt
         id: export
         env:
           ULDA_CI_RELEASE: ${{ inputs.release }}
@@ -103,6 +105,27 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
+      - name: Install scanner for advisory test-infrastructure inventory
+        id: fixture-scanner
+        continue-on-error: true
+        run: node scripts/ci/install-tools.mjs trivy
+      - name: Report database and proxy fixture CVEs (not release artifacts)
+        id: fixture-scan
+        if: steps.fixture-scanner.outcome == 'success'
+        continue-on-error: true
+        run: node scripts/ci/images.mjs scan-fixtures
+      - name: Surface incomplete advisory inventory
+        if: ${{ always() && (steps.fixture-scanner.outcome != 'success' || steps.fixture-scan.outcome != 'success') }}
+        run: echo '::warning::Test-infrastructure CVE inventory did not complete. This is not a security approval for PostgreSQL or the proxy.'
+      - name: Keep raw test-infrastructure findings separately
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fixture-reports-${{ github.sha }}
+          path: .local/ci-fixture-reports/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
 
   image-security:
     needs: images
@@ -121,7 +144,7 @@ jobs:
           name: checked-images-${{ github.sha }}
           path: .local/ci-images
       - run: node scripts/ci/install-tools.mjs trivy
-      - name: Verify archive hashes and scan all vulnerabilities
+      - name: Verify application archive and enforce full vulnerability gate
         env:
           ULDA_MANIFEST_SHA256: ${{ needs.images.outputs.manifest_sha256 }}
         run: node scripts/ci/images.mjs scan

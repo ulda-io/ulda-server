@@ -1,11 +1,15 @@
 # Container runtime policy
 
-The default stack contains one application server, PostgreSQL on a private
-network, and a one-shot migration job. Applications install `ulda-auth` on the
+The release contains one application image. PostgreSQL and the HTTPS proxy are
+operator-managed services. The repository's local test stack additionally
+contains PostgreSQL on a private network and a one-shot migration job. Applications install `ulda-auth` on the
 client and connect to the server URL. The server uses `ulda-core` verification;
 it does not need client passwords, origins, decryptors or a catalog hierarchy.
 
 ## Local setup and network boundary
+
+For an application-only deployment, follow [external database setup](EXTERNAL_DATABASE.md).
+The database/proxy images in the local examples are not published by ULDA.
 
 For a new volume, follow [deployment setup](DEPLOYMENT.md): create mounted password
 files, build, start PostgreSQL, explicitly initialize roles, then start the stack.

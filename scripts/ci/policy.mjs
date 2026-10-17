@@ -3,7 +3,12 @@ import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { assessNonAffected } from './vulnerability-assessment.mjs';
 
-export const names = ['server', 'postgres', 'proxy'];
+// Only application images may cross the registry publication boundary.
+export const names = ['server'];
+export const fixtureNames = ['postgres', 'proxy'];
+export const buildNames = [...names, ...fixtureNames];
+// Upstream PostgreSQL is an independently operated integration fixture, never a release artifact.
+export const externalPostgresImage = 'postgres:18.6-bookworm@sha256:afc7e2d441324c0388fa80c3d24f733b4194a4eb7f47dd8ee2b08eb1a24a647c';
 export const versionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 export async function sha256(file) {
   const hash = createHash('sha256');
@@ -34,13 +39,24 @@ export function validateIdentity(pkg, lock, env) {
   return pkg.version;
 }
 export function validateManifest(manifest, commit) {
-  assert.equal(manifest.schema, 1);
+  assert.equal(manifest.schema, 2);
   assert.match(commit, /^[a-f0-9]{40}$/);
   assert.equal(manifest.commit, commit);
   assert.equal(manifest.platform, 'linux/amd64');
   if (manifest.releaseAcceptance) assert.equal(manifest.sourceClean, true, 'Release source checkout was not clean');
   assert(versionPattern.test(manifest.version));
   assert.deepEqual(Object.keys(manifest.images).sort(), [...names].sort());
+  assert.deepEqual(Object.keys(manifest.testFixtures).sort(), [...fixtureNames].sort());
+  for (const name of fixtureNames) {
+    const item = manifest.testFixtures[name];
+    assert.deepEqual(Object.keys(item).sort(), ['id', 'tag']);
+    assert.equal(item.tag, `ulda-ci/${name}:candidate`);
+    assert.match(item.id, /^sha256:[a-f0-9]{64}$/);
+  }
+  assert.deepEqual(Object.keys(manifest.externalDatabase).sort(), ['contentIdentity', 'reference']);
+  assert.equal(manifest.externalDatabase.reference, externalPostgresImage);
+  assert.match(manifest.externalDatabase.contentIdentity, /^[a-f0-9]{64}$/);
+  assert.deepEqual([...manifest.checks].sort(), ['capacity', 'deployment', 'external-postgres', 'integration'], 'Missing required acceptance');
   for (const name of names) {
     const item = manifest.images[name];
     assert.equal(item.archive, `${name}.tar`);

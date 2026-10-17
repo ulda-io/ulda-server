@@ -126,19 +126,28 @@ authenticity. The default proof verifier accepts all requests that reach it;
 it supplies no application-specific security. The server has no built-in ACL,
 login or payload encryption. Reading by ID is intentionally allowed.
 
-The official configuration uses PostgreSQL with separate administrator, migration
-and runtime roles. The image runs non-root; Compose adds filesystem, capability,
-CPU, memory and PID restrictions. An optional reverse proxy provides HTTPS/WSS.
-Operators still own certificates, access/abuse policy, backups and host security.
+The built-in adapter uses PostgreSQL with separate administrator, migration and
+runtime roles. PostgreSQL is operated independently of the application release.
+The image runs non-root; Compose adds filesystem, capability, CPU, memory and
+PID restrictions. Operators own database/proxy installation and patches,
+certificates, access/abuse policy, backups and host security. ULDA maintains the
+server image, bundled dependencies, official adapter and schema migration code.
 
 Custom storage and proof modules execute as trusted code. Storage must implement
 atomic batches, aligned reads, defensive copies, read bounds and read-after-write
-behavior. No RAM fallback is used when PostgreSQL fails.
+behavior. No RAM fallback is used when PostgreSQL fails. See the
+[adapter contract](docs/STORAGE_ADAPTERS.md); no alternative persistent backend
+or remote adapter service is included in this release.
 
 These are implementation contracts, not a claim of a formal proof, independent
 audit, guaranteed availability or protection from a compromised client device.
 
 ## Distribution
+
+Only the ULDA Server application image is published. PostgreSQL and reverse
+proxy images are external infrastructure. Repository builds of those images
+remain local test fixtures; their CVE reports are separate from the application
+image gate and are not an assertion that those fixtures are safe for production.
 
 This manifest and the server's own code and documentation are covered by
 [LICENSE.md](LICENSE.md). Core, SDK, database, runtime and other dependencies
