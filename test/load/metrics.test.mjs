@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { Histogram, loadOptions, loadFailureCode } from "./metrics.mjs";
+import { Histogram, loadOptions, loadFailureCode, loadWorkerStatus } from "./metrics.mjs";
 // Keep candidate loading covered by the existing capacity-tool CI entry.
 import './sdk.test.mjs';
 
@@ -14,6 +14,23 @@ test('capacity failures expose only fixed codes, never private diagnostics', () 
   let reads = 0;
   assert.equal(loadFailureCode({ get code() { return ++reads <= 2 ? 'TIMEOUT' : secret; } }), 'TIMEOUT');
   assert.equal(reads, 1);
+});
+
+test('capacity worker diagnostics project safe phases, counts and exit state without raw IPC data', () => {
+  const secret = 'synthetic-private-error-detail';
+  const child = { ready: true, warmed: true, failed: true, exited: true, exitCode: 1,
+    report: { privateData: secret }, credentials: secret,
+    failure: { phase: 'verification', code: 'TIMEOUT', attempted: 12, confirmed: 12,
+      failed: 0, asyncErrors: 0, message: secret, stack: secret } };
+  assert.deepEqual(loadWorkerStatus(child, 2), { worker: 2, ready: true, warmed: true, failed: true,
+    exited: true, reportReceived: true, exitCode: 1,
+    failure: { phase: 'verification', code: 'TIMEOUT', attempted: 12, confirmed: 12, failed: 0, asyncErrors: 0 } });
+  child.failure = { phase: secret, code: secret, attempted: secret, confirmed: Infinity, failed: -1, asyncErrors: {} };
+  child.exitCode = null; child.report = null;
+  const status = loadWorkerStatus(child, 0);
+  assert.deepEqual(status.failure, { phase: 'unknown', code: 'CHECK_FAILED', attempted: null, confirmed: null, failed: null, asyncErrors: null });
+  assert.equal(status.exitCode, null); assert.equal(status.reportReceived, false);
+  assert.equal(JSON.stringify(status).includes(secret), false);
 });
 
 test("merged capacity histograms preserve every sample and expose overflow", () => {

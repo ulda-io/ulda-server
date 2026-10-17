@@ -30,6 +30,9 @@ server/database URL and never reads the operator's `.env`. The existing running
 application is not replaced. Cleanup verifies project labels before removing
 only test containers, networks and volumes; generated password files are removed.
 Test summaries remain in ignored `.local/ulda-capacity-*` directories.
+CI retains only their `result.json` files as capacity-report artifacts, including
+failed runs. Failure output contains fixed error codes, worker phases, counters
+and exit status; it never includes raw exceptions, payloads or credential files.
 
 ## Profiles and limits
 

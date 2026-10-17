@@ -12,6 +12,22 @@ export function loadFailureCode(error) {
   catch { return 'CHECK_FAILED'; }
 }
 
+export function loadWorkerStatus(child, worker) {
+  const count = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
+  const status = { worker, ready: child.ready === true, warmed: child.warmed === true,
+    failed: child.failed === true, exited: child.exited === true, reportReceived: !!child.report,
+    exitCode: count(child.exitCode) };
+  if (child.failure) {
+    const failure = child.failure;
+    status.failure = {
+      phase: ['clients', 'warmup', 'measurement', 'verification', 'async', 'update'].includes(failure.phase) ? failure.phase : 'unknown',
+      code: loadFailureCode(failure), attempted: count(failure.attempted), confirmed: count(failure.confirmed),
+      failed: count(failure.failed), asyncErrors: count(failure.asyncErrors),
+    };
+  }
+  return status;
+}
+
 export class Histogram {
   bins = new Uint32Array(60_001);
   count = 0;

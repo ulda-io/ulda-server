@@ -8,7 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
-import { Histogram, loadOptions } from "../test/load/metrics.mjs";
+import { Histogram, loadOptions, loadFailureCode, loadWorkerStatus } from "../test/load/metrics.mjs";
 import { auxiliaryImages } from "../test/support/auxiliary-images.mjs";
 import { httpReady } from "../test/support/http-probe.mjs";
 
@@ -110,7 +110,7 @@ async function main(){
       }
     });
     proc.on("error",()=>{child.failed=true;});
-    proc.on("exit",code=>{child.exited=true;if(code!==0||!child.report)child.failed=true;});
+    proc.on("exit",code=>{child.exited=true;child.exitCode=code;if(code!==0||!child.report)child.failed=true;});
     proc.send({action:"init",url,clients:count});
   }
   await waitFor(()=>children.every(c=>c.ready),600000);
@@ -149,9 +149,11 @@ async function main(){
   result.status="PASS";result.integrity="all final content sequences reread and verified; expected row count; no author echoes";
 }
 try{await main();}
-catch{
+catch(error){
   result.status="FAIL";result.failedPhase=phase;result.partial=children.map(c=>c.progress);
-  result.workerFailures=children.flatMap((c,worker)=>c.failure?[{worker,...c.failure}]:[]);
+  result.failureCode=loadFailureCode(error);
+  result.workerStatus=children.map(loadWorkerStatus);
+  result.workerFailures=result.workerStatus.filter(c=>c.failure).map(c=>({worker:c.worker,...c.failure}));
   process.exitCode=1;console.error("FAIL capacity "+phase+"; private diagnostics suppressed.");
 }
 finally{
@@ -168,5 +170,6 @@ finally{
     }
   }catch{result.cleanup="FAIL";result.status="FAIL";process.exitCode=1;}
   result.finishedAt=new Date().toISOString();fs.writeFileSync(path.join(folder,"result.json"),JSON.stringify(result,null,2)+"\n");
-  console.log(JSON.stringify({status:result.status,measurement:result.measurement,report:path.relative(root,path.join(folder,"result.json"))}));
+  console.log(JSON.stringify({status:result.status,failedPhase:result.failedPhase,failureCode:result.failureCode,
+    workerStatus:result.workerStatus,measurement:result.measurement,report:path.relative(root,path.join(folder,"result.json"))}));
 }

@@ -106,6 +106,15 @@ jobs:
         run: node scripts/ci/release-smoke.mjs --candidate
       - name: Closed-loop load and final persisted-state verification
         run: npm run test:capacity
+      - name: Keep numeric capacity diagnostics on success or failure
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: capacity-report-${{ github.sha }}-${{ github.run_attempt }}
+          path: .local/ulda-capacity-*/result.json
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
       - name: Export only the tested application image and acceptance receipt
         id: export
         env:
