@@ -47,8 +47,14 @@ jobs:
           ULDA_DOCKER_SERVER: ${{ vars.ULDA_DOCKER_SERVER }}
           DOCKER_CONFIG: ${{ runner.temp }}/ulda-registry-auth
         run: node scripts/ci/release.mjs publish
-      - name: Install isolated SDK consumer after registry credentials are removed
-        run: npm ci --prefix test/consumer --ignore-scripts --no-fund
+      - name: Install smoke dependencies after registry credentials are removed
+        # The raw protocol probe resolves socket.io-client from the repository
+        # root; the isolated SDK consumer has its own dependency tree.
+        run: |
+          npm ci --include=dev --ignore-scripts --no-fund
+          npm ci --prefix test/consumer --ignore-scripts --no-fund
+      - name: Verify published SDK and raw protocol probe imports
+        run: node --input-type=module -e "await import('./test/consumer/index.mjs'); await import('./test/support/read-records.mjs');"
       - name: Smoke test freshly pulled release with published SDK
         run: node scripts/ci/release-smoke.mjs
       - name: Save non-secret registry receipts
