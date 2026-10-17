@@ -16,9 +16,10 @@ and invalid scan evidence; no database package exception applies to the server.
 
 ## Supported versions
 
-This checkout is the development `0.1.0` version. It is not a supported stable
-1.0 release. Report security issues in the current development version privately;
-the stable supported-version policy will be established with the first release.
+Security fixes target the latest released `1.x` version. Upgrade to that version
+before reporting an issue that may already be fixed. Pre-1.0 builds and older
+patch releases do not receive separate security backports. Reports about current
+development code are also welcome through the private channels below.
 The protocol identifier `1.0` is separate from the server release number.
 
 Unofficial builds, custom adapters, host systems and third-party services are not

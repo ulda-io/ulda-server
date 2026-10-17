@@ -95,7 +95,7 @@ function testConfig(): AppConfig {
       idleInTransactionTimeoutMs: 10000,
     },
     corsOrigins: ["*"],
-    serverVersion: "0.1.0-test",
+    serverVersion: "1.0.0-test",
     protocolVersion: "1.0",
     ulda: {
       coreVersion: "fake",

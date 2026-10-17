@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.0
 
 - Application-only Docker Hub releases, with separately maintained databases
   and proxies; test-fixture CVE reports are advisory and remain visible.

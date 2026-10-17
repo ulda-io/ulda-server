@@ -152,7 +152,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean),
-    serverVersion: "0.1.0",
+    serverVersion: "1.0.0",
     protocolVersion,
     ulda: {
       coreVersion: readString(env, "ULDA_CORE_VERSION", "1.0.1"),
