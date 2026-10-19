@@ -180,4 +180,4 @@ see Section 5 of the license. Commercial terms are individually agreed.
 
 This is a source-available license, not an OSI-approved open-source license.
 Dependencies keep their own terms; see [third-party notices](THIRD_PARTY_NOTICES.md).
-Commercial inquiries: [mark@shaposhnik.ch](mailto:mark@shaposhnik.ch).
+Commercial inquiries: [admin@ulda.io](mailto:admin@ulda.io).

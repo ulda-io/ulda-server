@@ -30,7 +30,7 @@ code are welcome. Core and SDK have their own
 
 ## Private reporting
 
-Email [mark@shaposhnik.ch](mailto:mark@shaposhnik.ch) with subject
+Email [admin@ulda.io](mailto:admin@ulda.io) with subject
 `[SECURITY] ULDA Server vulnerability report`. Once private reporting is enabled
 in the official server repository, its **Security → Report a vulnerability**
 form is an alternative. Do not report an undisclosed vulnerability in a public
